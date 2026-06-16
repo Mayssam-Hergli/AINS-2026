@@ -44,6 +44,51 @@ Plan d'action personnalisé ancré dans une base de connaissances
 de 41+ ressources tunisiennes réelles. Chaque recommandation 
 cite sa source. Aucune hallucination possible.
 
+---
+
+## 🔒 Sécurité & Protection des Données
+
+Les entrepreneurs partagent des données sensibles sur leur projet —
+stratégie, finances, équipe, positionnement marché. Nous traitons
+ces données avec des standards de production.
+
+### Ce que nous protégeons
+- Données business confidentielles (idées pré-lancement, financials)
+- Profils entrepreneurs et historique de diagnostic
+- Réponses au questionnaire et scores
+
+### Couches de sécurité implémentées
+
+| Couche | Implémentation | Protection |
+|---|---|---|
+| Authentification | JWT + bcrypt | Sessions sécurisées, mots de passe hashés |
+| Isolation des données | Scoping par user_id | Un utilisateur ne voit jamais les données d'un autre |
+| Chiffrement transit | HTTPS enforced | Toutes les communications chiffrées |
+| Chiffrement repos | AES-256 sur champs sensibles | Données illisibles en cas de breach DB |
+| Rate limiting | slowapi (par IP + par user) | Protection contre spam et brute force |
+| CORS | Origine frontend uniquement | Aucun appel API depuis domaines non autorisés |
+| Validation inputs | Pydantic (FastAPI) | Aucune donnée malformée n'atteint la DB |
+| Injection prompts | Sanitisation avant Claude API | Aucune instruction malveillante dans les prompts |
+| Secrets | Variables d'environnement uniquement | Aucune clé dans le code ou GitHub |
+| Audit logging | Chaque accès loggé | Traçabilité complète des actions |
+| Headers sécurité | X-Content-Type, X-Frame, CSP | Protection navigateur standard |
+
+### Principe de minimisation des données
+Nous collectons uniquement ce que le diagnostic nécessite.
+Aucune donnée personnelle superflue n'est demandée ni stockée.
+Conforme aux bonnes pratiques RGPD.
+
+### En cas de score Green élevé ou données financières sensibles
+Les champs critiques (projections financières, données bancaires
+éventuelles) sont chiffrés au niveau du champ avant stockage —
+pas seulement au niveau de la base de données.
+
+### Transparence
+L'entrepreneur sait exactement quelles données sont collectées,
+pourquoi, et comment elles sont protégées.
+Aucune revente, aucune utilisation publicitaire.
+
+
 ### Bonus — Assistant Vocal Trilingue
 Assistant conversationnel en Français, Arabe et Darija Tunisienne,
 ancré dans les outputs du diagnostic et de la base de connaissances.
