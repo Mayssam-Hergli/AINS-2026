@@ -1,0 +1,92 @@
+{
+  "taxonomy": {
+    "version": "1.0",
+    "source": "AINS Hackathon 2026 — original contribution",
+    "stages": [
+      {
+        "id": 1,
+        "name": "Ideation",
+        "name_fr": "Idéation",
+        "name_ar": "مرحلة الفكرة",
+        "criteria": [
+          "Business idea exists but not yet validated",
+          "No customer interviews conducted",
+          "No legal structure",
+          "No revenue",
+          "Team may be solo founder"
+        ],
+        "typical_blockers": ["Lack of market knowledge", "No team", "No validation method"]
+      },
+      {
+        "id": 2,
+        "name": "Market Validation",
+        "name_fr": "Validation Marché",
+        "name_ar": "التحقق من السوق",
+        "criteria": [
+          "At least 10 customer interviews conducted",
+          "Problem-solution fit documented",
+          "At least 1 letter of intent or pilot",
+          "No signed revenue contracts yet",
+          "Business model being defined"
+        ],
+        "typical_blockers": ["Insufficient customer evidence", "Unclear value proposition"]
+      },
+      {
+        "id": 3,
+        "name": "Structuration",
+        "name_fr": "Structuration",
+        "name_ar": "الهيكلة",
+        "criteria": [
+          "Legal structure established or in process",
+          "Business model documented",
+          "Financial projections drafted",
+          "Team roles defined",
+          "First pilot or MVP exists"
+        ],
+        "typical_blockers": ["No legal form", "No financial model", "Weak team structure"]
+      },
+      {
+        "id": 4,
+        "name": "Fundraising",
+        "name_fr": "Levée de fonds",
+        "name_ar": "جمع التمويل",
+        "criteria": [
+          "Legal structure confirmed",
+          "Validated business model",
+          "Financial projections with assumptions",
+          "At least 1 paying customer or signed contract",
+          "Pitch deck ready"
+        ],
+        "typical_blockers": ["No traction", "No investor readiness", "Missing financial documentation"]
+      },
+      {
+        "id": 5,
+        "name": "Launch Planning",
+        "name_fr": "Planification du lancement",
+        "name_ar": "التخطيط للإطلاق",
+        "criteria": [
+          "Product or service ready for market",
+          "Go-to-market strategy defined",
+          "Initial funding secured or bootstrapped",
+          "Operations team in place",
+          "Marketing and sales plan drafted"
+        ],
+        "typical_blockers": ["No go-to-market strategy", "Operational gaps", "Insufficient funding"]
+      },
+      {
+        "id": 6,
+        "name": "Growth",
+        "name_fr": "Croissance",
+        "name_ar": "النمو",
+        "criteria": [
+          "Active revenue generating",
+          "Repeatable sales process",
+          "Team scaling",
+          "Market expansion planned",
+          "KPIs tracked and positive"
+        ],
+        "typical_blockers": ["Scaling bottlenecks", "Cash flow management", "Market saturation risk"]
+      }
+    ]
+  }
+}
