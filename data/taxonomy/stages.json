@@ -1,92 +1,201 @@
 {
   "taxonomy": {
     "version": "1.0",
+    "created": "June 2026",
     "source": "AINS Hackathon 2026 — original contribution",
+    "description": "Taxonomie des 6 stades de maturité entrepreneuriale avec critères définis, indicateurs de gap et cas de divergence perception-réalité",
     "stages": [
       {
         "id": 1,
         "name": "Ideation",
         "name_fr": "Idéation",
         "name_ar": "مرحلة الفكرة",
+        "name_tn": "بداية الفكرة",
+        "description": "L'idée existe mais n'a pas encore été confrontée au marché ou aux clients potentiels.",
         "criteria": [
-          "Business idea exists but not yet validated",
-          "No customer interviews conducted",
-          "No legal structure",
-          "No revenue",
-          "Team may be solo founder"
+          "Idée business définie mais non validée",
+          "Aucune interview client conduite",
+          "Aucune structure juridique",
+          "Aucun revenu",
+          "Pas de MVP ou prototype",
+          "Équipe potentiellement solo"
         ],
-        "typical_blockers": ["Lack of market knowledge", "No team", "No validation method"]
+        "typical_blockers": [
+          "Manque de connaissance marché",
+          "Pas d'équipe constituée",
+          "Aucune méthode de validation",
+          "Idée non différenciée"
+        ],
+        "financing_eligible": false,
+        "gap_cases": [
+          {
+            "self_assessed": "Fundraising",
+            "actual": "Ideation",
+            "explanation": "L'entrepreneur pense être prêt au financement mais n'a conduit aucune interview client, n'a aucune preuve de demande et aucune structure juridique."
+          }
+        ]
       },
       {
         "id": 2,
         "name": "Market Validation",
         "name_fr": "Validation Marché",
         "name_ar": "التحقق من السوق",
+        "name_tn": "تأكيد السوق",
+        "description": "L'entrepreneur teste activement son hypothèse de problème et de solution auprès de clients potentiels réels.",
         "criteria": [
-          "At least 10 customer interviews conducted",
-          "Problem-solution fit documented",
-          "At least 1 letter of intent or pilot",
-          "No signed revenue contracts yet",
-          "Business model being defined"
+          "Au moins 10 interviews clients conduites",
+          "Adéquation problème-solution documentée",
+          "Au moins 1 lettre d'intention ou contrat pilote",
+          "Pas encore de revenus signés",
+          "Modèle business en cours de définition",
+          "Premiers retours marché collectés"
         ],
-        "typical_blockers": ["Insufficient customer evidence", "Unclear value proposition"]
+        "typical_blockers": [
+          "Preuves client insuffisantes",
+          "Proposition de valeur floue",
+          "Pas de différenciation claire",
+          "Segment cible mal défini"
+        ],
+        "financing_eligible": false,
+        "gap_cases": [
+          {
+            "self_assessed": "Fundraising",
+            "actual": "Market Validation",
+            "explanation": "L'entrepreneur déclare 3 clients potentiels mais aucune LOI signée, aucun revenu et aucun modèle business documenté. La traction déclarée n'est pas substantiée."
+          },
+          {
+            "self_assessed": "Launch Planning",
+            "actual": "Market Validation",
+            "explanation": "Le produit est en développement mais aucune validation de demande réelle n'a été conduite. Un produit sans demande validée n'est pas prêt au lancement."
+          }
+        ]
       },
       {
         "id": 3,
         "name": "Structuration",
         "name_fr": "Structuration",
         "name_ar": "الهيكلة",
+        "name_tn": "التنظيم",
+        "description": "Le projet se structure juridiquement, financièrement et opérationnellement pour préparer sa phase de croissance.",
         "criteria": [
-          "Legal structure established or in process",
-          "Business model documented",
-          "Financial projections drafted",
-          "Team roles defined",
-          "First pilot or MVP exists"
+          "Structure juridique établie ou en cours",
+          "Modèle business documenté",
+          "Projections financières rédigées",
+          "Rôles équipe définis",
+          "Premier pilote ou MVP existant",
+          "Premiers revenus ou contrats signés"
         ],
-        "typical_blockers": ["No legal form", "No financial model", "Weak team structure"]
+        "typical_blockers": [
+          "Pas de forme juridique",
+          "Pas de modèle financier",
+          "Structure d'équipe faible",
+          "MVP non fonctionnel"
+        ],
+        "financing_eligible": false,
+        "gap_cases": [
+          {
+            "self_assessed": "Fundraising",
+            "actual": "Structuration",
+            "explanation": "L'entrepreneur a un MVP et quelques clients mais n'a pas de structure juridique confirmée ni de projections financières. Ces deux éléments sont requis avant toute levée."
+          }
+        ]
       },
       {
         "id": 4,
         "name": "Fundraising",
         "name_fr": "Levée de fonds",
         "name_ar": "جمع التمويل",
+        "name_tn": "البحث عن تمويل",
+        "description": "Le projet est structuré et validé. L'entrepreneur recherche activement un financement externe pour accélérer sa croissance.",
         "criteria": [
-          "Legal structure confirmed",
-          "Validated business model",
-          "Financial projections with assumptions",
-          "At least 1 paying customer or signed contract",
-          "Pitch deck ready"
+          "Structure juridique confirmée",
+          "Modèle business validé par le marché",
+          "Projections financières avec hypothèses documentées",
+          "Au moins 1 client payant ou contrat signé",
+          "Pitch deck prêt",
+          "Besoins de financement quantifiés"
         ],
-        "typical_blockers": ["No traction", "No investor readiness", "Missing financial documentation"]
+        "typical_blockers": [
+          "Pas de traction démontrable",
+          "Pas de préparation investisseur",
+          "Documentation financière manquante",
+          "Valorisation non justifiée"
+        ],
+        "financing_eligible": true,
+        "gap_cases": [
+          {
+            "self_assessed": "Fundraising",
+            "actual": "Structuration",
+            "explanation": "L'entrepreneur a un pitch deck mais pas de client payant et pas de structure juridique. Un investisseur ne peut pas financer un projet sans traction ni entité légale."
+          }
+        ]
       },
       {
         "id": 5,
         "name": "Launch Planning",
         "name_fr": "Planification du lancement",
         "name_ar": "التخطيط للإطلاق",
+        "name_tn": "التحضير للإطلاق",
+        "description": "Le financement est sécurisé ou le projet est autofinancé. L'entrepreneur prépare le lancement commercial à grande échelle.",
         "criteria": [
-          "Product or service ready for market",
-          "Go-to-market strategy defined",
-          "Initial funding secured or bootstrapped",
-          "Operations team in place",
-          "Marketing and sales plan drafted"
+          "Produit ou service prêt pour le marché",
+          "Stratégie go-to-market définie",
+          "Financement initial sécurisé ou bootstrappé",
+          "Équipe opérationnelle en place",
+          "Plan marketing et ventes rédigé",
+          "Processus opérationnels définis"
         ],
-        "typical_blockers": ["No go-to-market strategy", "Operational gaps", "Insufficient funding"]
+        "typical_blockers": [
+          "Pas de stratégie go-to-market",
+          "Gaps opérationnels",
+          "Financement insuffisant",
+          "Équipe incomplète"
+        ],
+        "financing_eligible": true,
+        "gap_cases": [
+          {
+            "self_assessed": "Growth",
+            "actual": "Launch Planning",
+            "explanation": "L'entrepreneur a des revenus initiaux mais pas de processus de vente répétable ni d'équipe scalable. Les premiers revenus ne constituent pas encore une croissance structurée."
+          }
+        ]
       },
       {
         "id": 6,
         "name": "Growth",
         "name_fr": "Croissance",
         "name_ar": "النمو",
+        "name_tn": "مرحلة النمو",
+        "description": "Le projet génère des revenus récurrents et cherche à scaler ses opérations, son équipe et sa présence marché.",
         "criteria": [
-          "Active revenue generating",
-          "Repeatable sales process",
-          "Team scaling",
-          "Market expansion planned",
-          "KPIs tracked and positive"
+          "Revenus récurrents actifs",
+          "Processus de vente répétable",
+          "Équipe en cours de scaling",
+          "Expansion marché planifiée",
+          "KPIs trackés et positifs",
+          "Modèle économique prouvé"
         ],
-        "typical_blockers": ["Scaling bottlenecks", "Cash flow management", "Market saturation risk"]
+        "typical_blockers": [
+          "Goulots d'étranglement au scaling",
+          "Gestion du cash flow",
+          "Risque de saturation marché",
+          "Rétention clients insuffisante"
+        ],
+        "financing_eligible": true,
+        "gap_cases": [
+          {
+            "self_assessed": "Growth",
+            "actual": "Launch Planning",
+            "explanation": "L'entrepreneur déclare être en croissance mais n'a pas de métriques de rétention, pas de processus de vente documenté et dépend encore de clients acquis manuellement."
+          }
+        ]
       }
-    ]
+    ],
+    "gap_detection_summary": {
+      "description": "Cas documentés de divergence entre auto-évaluation et diagnostic réel",
+      "total_cases": 7,
+      "most_common_gap": "Auto-évaluation Fundraising → Diagnostic Structuration ou Market Validation",
+      "insight": "Les entrepreneurs surestiment systématiquement leur maturité de 1 à 2 stades. Le gap le plus fréquent est de se croire prêt au financement sans traction ni structure juridique confirmée."
+    }
   }
 }
