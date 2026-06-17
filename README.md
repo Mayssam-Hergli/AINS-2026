@@ -32,6 +32,24 @@ Questionnaire dynamique dont les questions évoluent selon les
 réponses. Classifie le projet parmi 6 stades de maturité et détecte 
 l'écart entre la perception de l'entrepreneur et la réalité.
 
+### Document Intelligence — Analyse de documents
+
+L'entrepreneur peut soumettre des documents optionnellement lors du questionnaire :
+business plan, relevés financiers, contrats signés, lettres d'intention, photos d'opérations.
+La soumission n'est pas obligatoire — le système fonctionne sans, mais les résultats
+sont plus précis avec.
+
+Claude Vision API analyse chaque document et extrait les signaux pertinents :
+chiffres d'affaires réels, preuves de traction, clauses contractuelles, état financier.
+Ces signaux sont croisés avec les réponses déclarées dans le questionnaire.
+
+Si l'entrepreneur déclare n'avoir aucun client mais soumet un contrat signé,
+le système détecte la divergence et l'intègre dans le diagnostic et le scoring.
+
+Formats acceptés : PDF, JPG, JPEG, PNG
+Taille maximale : 10 MB par fichier
+Traitement : Claude Vision API — extraction et structuration automatique
+
 ### Module 2 — Scoring Multi-Dimensionnel Explicable
 5 scores composites (Marché, Offre Commerciale, Innovation, 
 Scalabilité, Green) avec sous-critères pondérés, justifications 
@@ -43,6 +61,26 @@ lors du workshop AINS 2026.
 Plan d'action personnalisé ancré dans une base de connaissances 
 de 41+ ressources tunisiennes réelles. Chaque recommandation 
 cite sa source. Aucune hallucination possible.
+
+### Générateur de Rapport PDF
+
+À la fin du parcours complet, la plateforme génère un rapport PDF professionnel
+téléchargeable contenant :
+
+- Stade de maturité diagnostiqué avec les preuves collectées
+- Analyse de gap si auto-évaluation diverge du diagnostic
+- 5 score cards avec sous-scores, pondérations et justifications
+- Green Score PNUD avec détail par pilier et classification officielle
+- Blockers prioritaires classés par domaine et sévérité
+- Roadmap personnalisée avec horizons temporels
+- Ressources recommandées avec sources et coordonnées
+- Recommandations d'optimisation verte avec estimations de coût en TND
+
+Ce rapport est le document que l'entrepreneur présente à une banque,
+un incubateur, ou un programme de financement.
+
+Généré avec : ReportLab
+Langues : Français, Arabe MSA, Darija Tunisienne
 
 ---
 
@@ -88,6 +126,9 @@ L'entrepreneur sait exactement quelles données sont collectées,
 pourquoi, et comment elles sont protégées.
 Aucune revente, aucune utilisation publicitaire.
 
+Les documents uploadés sont chiffrés au repos, scopés à l'utilisateur
+authentifié, et peuvent être supprimés sur demande après analyse.
+
 
 ### Bonus — Assistant Vocal Trilingue
 Assistant conversationnel en Français, Arabe et Darija Tunisienne,
@@ -98,6 +139,14 @@ ancré dans les outputs du diagnostic et de la base de connaissances.
 ##  Architecture
 
 [React Dashboard]
+
+│
+
+├──► Questionnaire adaptatif
+
+│
+
+└──► Upload documents optionnel (PDF · JPG · PNG)
 
 │
 
@@ -125,6 +174,14 @@ ancré dans les outputs du diagnostic et de la base de connaissances.
 
 Trilingual FR/AR
 
+│
+
+├──► Dashboard React · Mon Parcours
+
+│
+
+└──► PDF Report Generator · ReportLab · Rapport téléchargeable
+
 
 # description de l'architecture 
 
@@ -147,6 +204,8 @@ Cross-module triggers — the arrows between microservices show the integration:
 | Backend | FastAPI (Python) |
 | Frontend | React + Tailwind CSS |
 | LLM | Claude API (Anthropic) — claude-sonnet-4-6 |
+| Vision / Documents | Claude Vision API — PDF, JPG, PNG |
+| Génération PDF | ReportLab |
 | Vector DB | ChromaDB |
 | Embeddings | sentence-transformers |
 | Base de données | SQLite → PostgreSQL |
@@ -222,6 +281,16 @@ source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 cp .env.example .env      # ajouter votre clé Anthropic
 uvicorn main:app --reload
+```
+
+```env
+# .env — variables requises
+ANTHROPIC_API_KEY=your_key_here
+MAX_UPLOAD_SIZE_MB=10
+ALLOWED_FILE_TYPES=pdf,jpg,jpeg,png
+```
+
+```bash
 
 # Frontend
 cd frontend
@@ -235,17 +304,23 @@ npm start
 
 ## Protocole d'Évaluation
 
-- **Classification accuracy** — 30 profils labellisés (5 par stade)
-- **Precision@3** — pertinence des ressources récupérées sur 10 profils
-- Résultats dans `/data/evaluation/`
+| Métrique | Description | Cible |
+|---|---|---|
+| Classification accuracy | 30 profils labellisés (5 par stade) | — |
+| Precision@3 | Pertinence des ressources récupérées sur 10 profils | — |
+| Document extraction accuracy | Signaux extraits vs signaux réels sur 10 documents | >= 75% |
+
+Résultats dans `/data/evaluation/`
 
 ---
 
 ##  Langues Supportées
 
-- 🇫🇷 Français
-- 🇸🇦 Arabe (MSA)
-- 🇹🇳 Darija Tunisienne
+| Langue | Rapport PDF |
+|---|---|
+| 🇫🇷 Français | Oui |
+| 🇸🇦 Arabe MSA | Oui |
+| 🇹🇳 Darija Tunisienne | Oui |
 
 ---
 
