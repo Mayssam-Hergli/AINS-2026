@@ -123,9 +123,11 @@ ancré dans les outputs du diagnostic et de la base de connaissances.
 
 [Claude API — Anthropic]
 
-Trilingual FR/AR/Darija
+Trilingual FR/AR
 
-" description mtaa el architecture "
+
+# description de l'architecture 
+
 React Frontend — single SPA in French/Arabic, calls the gateway with REST, renders the dashboard, Mon Parcours view, and scores.
 FastAPI Gateway — single entry point, routes /diagnose, /score, /roadmap to the right microservice, handles auth.
 3 Microservices — each is its own FastAPI app (can run as separate containers):
