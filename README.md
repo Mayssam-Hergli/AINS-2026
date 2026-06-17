@@ -141,49 +141,7 @@ ancré dans les outputs du diagnostic et de la base de connaissances.
 
 ##  Architecture
 
-[React Dashboard]
-
-│
-
-├──► Questionnaire adaptatif
-
-│
-
-└──► Upload documents optionnel (PDF · JPG · PNG)
-
-│
-
-▼
-
-[Project Profile Store — SQLite]
-
-│
-
-├──► [Diagnostic Engine] → classification + gap detection
-
-│
-
-├──► [Scoring Engine] → 5 scores + UNDP Green framework
-
-│
-
-└──► [RAG Pipeline — ChromaDB] → roadmap + resources
-
-│
-
-▼
-
-[Claude API — Anthropic]
-
-Trilingual FR/AR
-
-│
-
-├──► Dashboard React · Mon Parcours
-
-│
-
-└──► PDF Report Generator · ReportLab · Rapport téléchargeable
+![System Architecture](docs/system_design1.svg)
 
 # description de l'architecture 
 React Frontend — single SPA in French/Arabic, calls the gateway with REST, renders the dashboard, Mon Parcours view, and scores.
