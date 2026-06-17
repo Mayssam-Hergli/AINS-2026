@@ -1,0 +1,50 @@
+# 🚀 AINS 2026: Sentinel Engine
+## The Agentic Co-Founder for the Tunisian Ecosystem
+
+The **Sentinel Engine** is a tactical command center designed to bridge the gap between Tunisian startups and institutional support. By moving beyond passive RAG, our system acts as an **active, autonomous diagnostic agent** that resolves perception gaps, optimizes sustainability, and proactively matches founders with their "Success Twins."
+
+---
+
+### 🧠 The Sentinel Intelligence Architecture
+We have engineered a **decoupled, multi-agent framework** that treats the `project_profile` as a high-integrity contract.
+
+
+
+#### 🛠 The "Mission Impossible" Tech Stack
+* **Orchestration Hub:** **n8n** manages asynchronous agent workflows, ensuring complex AI tasks (RAG, roadmap generation) don't block the API.
+* **Intelligent Gateway:** **FastAPI** provides a high-performance, asynchronous entry point with Pydantic telemetry.
+* **Vector-Driven Insight:** **ChromaDB** + `sentence-transformers` performs semantic matchmaking across 41+ validated Tunisian programs.
+* **Cognitive Core:** **Claude API** (Anthropic) acts as the reasoning engine for gap analysis, while **Whisper** powers our trilingual (Darija/Arabic/French) voice-first interface.
+
+---
+
+### ✨ What Makes Us Shine (The "KO" Features)
+1. **Agentic Reality Check:** Our MS1 module proactively flags "perception gaps" (e.g., self-assessed growth vs. validation reality) and triggers an autonomous "Tough Love" interview.
+2. **Success Twin Discovery:** We leverage anonymized historical data to match current founders with peers who successfully navigated identical blockers.
+3. **UNDP Green Reactor:** Sustainability is not an afterthought. Our system monitors four environmental pillars and dynamically pivots the roadmap if green-score thresholds are compromised.
+4. **Resilient Data Pipeline:** We utilize **Dead Letter Queues (DLQ)** and schema validation to ensure that no ecosystem data is lost or corrupted during ingestion.
+
+---
+
+### ⚡ Data Streaming & Engineering Best Practices
+Our pipeline is designed for **scale and production-level stability**:
+* **Asynchronous Webhooks:** We use non-blocking webhooks to trigger n8n workflows, ensuring the UI remains responsive even during deep-learning inference.
+* **Backpressure Management:** By using message brokering (Redis), our system handles concurrent requests gracefully without overloading the Claude API.
+* **Event-Driven UI:** We employ **WebSocket streaming** to provide a real-time "Tactical HUD" (Heads-Up Display) feel, allowing entrepreneurs to watch the system "think" as it processes their diagnostic data.
+* **Self-Healing Knowledge Base:** n8n autonomously validates resource integrity (length, source links, maturity tags) daily, keeping the knowledge base clean and accurate.
+
+---
+
+### 🚀 Quick Start
+1. **Clone the Repo:** `git clone [repo-link]`
+2. **Infrastructure:** `docker-compose up -d` (Includes Postgres/ChromaDB/n8n services).
+3. **Environment:** Configure your `.env` for Anthropic, OpenAI, and Database credentials.
+4. **Orchestrate:** Access the **n8n Canvas** to visualize your agentic workflows in real-time.
+
+---
+
+### 🤝 The Contributors
+* [Team Member 1] | [Team Member 2]
+* [Team Member 3] | [Team Member 4]
+
+*Built for AINS Hackathon 2026: PNUD, GEWEET, ODC, IEEE, APII, and AINS 4.0.*
