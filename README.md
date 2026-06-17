@@ -1,8 +1,11 @@
-# 🇹🇳 AINS 2026 — Plateforme IA pour l'Entrepreneuriat
+# Massar — مسار | Plateforme IA pour l'Entrepreneuriat
 
-> Une plateforme IA qui dit aux entrepreneurs tunisiens exactement 
+> Massar — مسار | Une plateforme IA qui dit aux entrepreneurs tunisiens exactement 
 > où en est leur projet, pourquoi, et quoi faire ensuite —
 > dans leur langue.
+
+> *"Massar — Connaître votre trajectoire. Choisir votre chemin."*
+> *"مسار — اعرف وين أنت. اختار وين تمشي."*
 
 **AINS Hackathon 2026** — Organisé par PNUD, GEWEET, ODC, IEEE, APII et AINS 4.0
 
@@ -321,4 +324,4 @@ Résultats dans `/data/evaluation/`
 
 ---
 
-
+*Massar — مسار | AINS Hackathon 2026 — Tunisie*
