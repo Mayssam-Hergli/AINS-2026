@@ -71,4 +71,21 @@ def detect_all_anomalies(
             "severity": "medium",
         })
 
+    # (e) Product fully built + offer-need alignment never validated
+    # Both fields are raw questionnaire keys in diagnostic_answers.
+    # all_scores["commercial"] only carries numeric scores — not the original
+    # category strings — so we read directly from diagnostic_answers here.
+    if (
+        diagnostic_answers.get("product_maturity") == "product"
+        and diagnostic_answers.get("offer_need_alignment") == "none"
+    ):
+        flags.append({
+            "code": "product_built_unvalidated",
+            "message": (
+                "Produit entièrement développé sans validation du besoin "
+                "client — risque de construire quelque chose que le marché ne veut pas"
+            ),
+            "severity": "medium",
+        })
+
     return {"anomaly_flags": flags}

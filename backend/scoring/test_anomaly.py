@@ -217,6 +217,48 @@ def test_multiple_flags_combined():
     print(f"PASS  Test 5 — all 4 flags fire together | codes: {codes}")
 
 
+# ---------------------------------------------------------------------------
+# Test 6 — product_built_unvalidated: product fully built, need never validated
+# Distinct from market_no_validation: a founder can have done customer
+# interviews (passing check a) while still never validating THIS SPECIFIC
+# product against a real need (failing this one). They are not redundant.
+# ---------------------------------------------------------------------------
+def test_product_built_unvalidated_fires():
+    answers = {
+        "product_maturity":     "product",
+        "offer_need_alignment": "none",
+    }
+    r = detect_all_anomalies(answers, _EMPTY_SCORES)
+    codes = [f["code"] for f in r["anomaly_flags"]]
+    assert "product_built_unvalidated" in codes, \
+        f"expected flag product_built_unvalidated, got: {codes}"
+    flag = next(f for f in r["anomaly_flags"] if f["code"] == "product_built_unvalidated")
+    assert flag["severity"] == "medium", f"expected severity=medium, got {flag['severity']}"
+    print(f"PASS  Test 6a — product_built_unvalidated fires (product + none) | flags: {codes}")
+
+
+def test_product_built_unvalidated_silent_when_validated():
+    answers = {
+        "product_maturity":     "product",
+        "offer_need_alignment": "validated",  # aligned with real need → no flag
+    }
+    r = detect_all_anomalies(answers, _EMPTY_SCORES)
+    codes = [f["code"] for f in r["anomaly_flags"]]
+    assert "product_built_unvalidated" not in codes, f"unexpected flag: {codes}"
+    print(f"PASS  Test 6b — product_built_unvalidated silent when alignment=validated")
+
+
+def test_product_built_unvalidated_silent_when_prototype():
+    answers = {
+        "product_maturity":     "prototype",  # not fully built yet → different risk profile
+        "offer_need_alignment": "none",
+    }
+    r = detect_all_anomalies(answers, _EMPTY_SCORES)
+    codes = [f["code"] for f in r["anomaly_flags"]]
+    assert "product_built_unvalidated" not in codes, f"unexpected flag: {codes}"
+    print(f"PASS  Test 6c — product_built_unvalidated silent when maturity=prototype")
+
+
 if __name__ == "__main__":
     test_market_no_validation_fires()
     test_market_no_validation_silent_when_small()
@@ -231,4 +273,7 @@ if __name__ == "__main__":
     test_green_fundraising_risk_silent_when_low_impact()
     test_green_fundraising_risk_silent_when_no_pitch_deck()
     test_multiple_flags_combined()
+    test_product_built_unvalidated_fires()
+    test_product_built_unvalidated_silent_when_validated()
+    test_product_built_unvalidated_silent_when_prototype()
     print("\nAll anomaly tests passed.")
