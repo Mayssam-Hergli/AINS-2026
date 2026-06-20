@@ -1,0 +1,14 @@
+# Core data modelling
+pydantic>=2.6
+
+# Document extraction
+pdfplumber>=0.11
+python-docx>=1.1
+pandas>=2.2
+openpyxl>=3.1          # Excel engine for pandas
+
+# Persistence (PostgreSQL + pgvector)
+asyncpg>=0.29
+
+# Structured LLM maturity classification
+anthropic>=0.69
