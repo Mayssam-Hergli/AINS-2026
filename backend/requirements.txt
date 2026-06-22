@@ -1,0 +1,25 @@
+# Web framework
+fastapi==0.137.1
+uvicorn[standard]
+python-multipart      # required for OAuth2PasswordRequestForm
+
+# Auth
+python-jose[cryptography]
+passlib
+
+# Config
+python-dotenv
+pydantic-settings
+
+# Rate limiting
+slowapi
+
+# LLM providers (scoring agent)
+openai                # Groq uses openai-compatible API
+anthropic             # optional: set LLM_PROVIDER=anthropic
+
+# RAG (MS3)
+chromadb
+
+# Dev / testing
+# (no extra test packages needed — all tests use stdlib unittest + pytest-style assertions)

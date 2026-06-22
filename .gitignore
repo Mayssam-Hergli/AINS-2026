@@ -216,3 +216,10 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# SQLite dev database
+backend/ains.db
+
+# Frontend
+frontend/node_modules/
+frontend/dist/

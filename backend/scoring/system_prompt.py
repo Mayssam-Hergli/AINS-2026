@@ -59,10 +59,9 @@ Pour les 5 premiers outils, tu passes l'intégralité des réponses au \
 questionnaire telles que reçues (le dict diagnostic_answers complet). \
 Chaque outil ne lit que les champs dont il a besoin et ignore les autres.
 
-Pour detect_all_anomalies, tu passes :
-  - "diagnostic_answers" : le dict de réponses complet
-  - "all_scores" : les 5 résultats d'outils, sous les clés \
-"market", "commercial", "innovation", "scalability", "green"
+Pour detect_all_anomalies, tu passes un objet vide {} — aucun paramètre \
+n'est nécessaire. Le pipeline injecte automatiquement les réponses et les \
+5 scores depuis les résultats des outils précédents.
 
 ════════════════════════════════════════
 RÉDACTION DES JUSTIFICATIONS

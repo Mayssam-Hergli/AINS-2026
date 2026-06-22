@@ -80,18 +80,24 @@ def test_schema_shape():
         schema = tool.get("input_schema", {})
         assert schema.get("type") == "object", \
             f"{name}: input_schema.type must be 'object'"
-        assert "properties" in schema and len(schema["properties"]) > 0, \
-            f"{name}: input_schema.properties must be non-empty"
-        assert "required" in schema and len(schema["required"]) > 0, \
-            f"{name}: input_schema.required must be non-empty"
+        assert "properties" in schema, \
+            f"{name}: input_schema must have 'properties' key"
+        assert "required" in schema, \
+            f"{name}: input_schema must have 'required' key"
+        # detect_all_anomalies intentionally has empty properties —
+        # agent.py injects data from tracked state, not from model args
+        if name != "detect_all_anomalies":
+            assert len(schema["properties"]) > 0, \
+                f"{name}: input_schema.properties must be non-empty"
+            assert len(schema["required"]) > 0, \
+                f"{name}: input_schema.required must be non-empty"
 
-    # detect_all_anomalies specifically needs both top-level keys
+    # detect_all_anomalies takes no parameters from the model —
+    # agent.py injects diagnostic_answers + all_scores from tracked state.
     anomaly_tool = next(t for t in TOOLS if t["name"] == "detect_all_anomalies")
     props = anomaly_tool["input_schema"]["properties"]
-    assert "diagnostic_answers" in props, \
-        "detect_all_anomalies schema missing diagnostic_answers"
-    assert "all_scores" in props, \
-        "detect_all_anomalies schema missing all_scores"
+    assert props == {}, \
+        f"detect_all_anomalies schema should have no properties, got: {list(props.keys())}"
 
     # detect_all_anomalies must be last (called after all 5 scores exist)
     assert TOOLS[-1]["name"] == "detect_all_anomalies", \

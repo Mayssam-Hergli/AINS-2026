@@ -8,23 +8,28 @@ import os
 
 load_dotenv()
 
+from database import init_db
+from api.auth import router as auth_router
+from api.profiles import router as profiles_router
+from api.scoring import router as scoring_router
+
 # ─── App Instance ────────────────────────────────────────────
 app = FastAPI(
     title="AINS 2026 — Plateforme IA pour l'Entrepreneuriat",
     description="""
-    Plateforme de diagnostic, scoring et orientation 
+    Plateforme de diagnostic, scoring et orientation
     pour les entrepreneurs tunisiens.
-    
+
     3 modules intégrés:
-    - Moteur de diagnostic adaptapython -m uvicorn main:app --reloadtif (6 stades de maturité)
+    - Moteur de diagnostic adaptatif (6 stades de maturité)
     - Scoring multi-dimensionnel explicable (5 dimensions)
     - RAG + Roadmap ancrée dans 41+ ressources tunisiennes réelles
-    
+
     Assistant trilingue: Français / Arabe / Darija Tunisienne
     """,
     version="1.0.0",
     docs_url="/docs",
-    redoc_url="/redoc"
+    redoc_url="/redoc",
 )
 
 # ─── Rate Limiting ────────────────────────────────────────────
@@ -41,43 +46,33 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ─── Routes ───────────────────────────────────────────────────
+# ─── Database init ────────────────────────────────────────────
+@app.on_event("startup")
+def on_startup():
+    init_db()
 
+# ─── Routers ──────────────────────────────────────────────────
+app.include_router(auth_router)
+app.include_router(profiles_router)
+app.include_router(scoring_router)
+
+# ─── Health ───────────────────────────────────────────────────
 @app.get("/", tags=["Health"])
 def root():
     return {
         "platform": "AINS 2026 — Plateforme IA pour l'Entrepreneuriat",
         "status": "running",
         "version": "1.0.0",
-        "modules": [
-            "diagnostic",
-            "scoring", 
-            "rag",
-            "assistant"
-        ],
+        "modules": ["diagnostic", "scoring", "rag", "assistant"],
         "languages": ["fr", "ar", "tn"],
-        "docs": "/docs"
+        "docs": "/docs",
     }
 
 @app.get("/health", tags=["Health"])
 def health():
     return {"status": "healthy"}
 
-# ─── Auth Routes (skeleton) ───────────────────────────────────
-
-@app.post("/auth/register", tags=["Auth"])
-def register():
-    return {"message": "register endpoint — coming Day 1"}
-
-@app.post("/auth/login", tags=["Auth"])
-def login():
-    return {"message": "login endpoint — coming Day 1"}
-
-@app.get("/auth/me", tags=["Auth"])
-def me():
-    return {"message": "me endpoint — coming Day 1"}
-
-# ─── Diagnostic Routes (skeleton) ────────────────────────────
+# ─── Diagnostic Routes (stub — owned by MS1) ─────────────────
 
 @app.post("/diagnostic/start", tags=["Diagnostic"])
 def start_diagnostic():
@@ -105,27 +100,7 @@ def get_diagnostic_result(profile_id: str):
     """
     return {"message": f"diagnostic result for {profile_id} — coming Day 2"}
 
-# ─── Scoring Routes (skeleton) ────────────────────────────────
-
-@app.post("/scores/compute/{profile_id}", tags=["Scoring"])
-def compute_scores(profile_id: str):
-    """
-    Calcule les 5 scores composites:
-    - Score Marché
-    - Score Offre Commerciale  
-    - Score Innovation
-    - Score Scalabilité
-    - Green Score (référentiel PNUD)
-    
-    Chaque score inclut sous-critères, pondérations et justification Claude.
-    """
-    return {"message": f"scores for {profile_id} — coming Day 2"}
-
-@app.get("/scores/{profile_id}", tags=["Scoring"])
-def get_scores(profile_id: str):
-    return {"message": f"get scores for {profile_id} — coming Day 2"}
-
-# ─── RAG + Roadmap Routes (skeleton) ─────────────────────────
+# ─── RAG + Roadmap Routes (stub — owned by MS3) ──────────────
 
 @app.post("/roadmap/generate/{profile_id}", tags=["RAG & Roadmap"])
 def generate_roadmap(profile_id: str):
@@ -140,7 +115,7 @@ def generate_roadmap(profile_id: str):
 def get_roadmap(profile_id: str):
     return {"message": f"get roadmap for {profile_id} — coming Day 3"}
 
-# ─── Assistant Routes (skeleton) ──────────────────────────────
+# ─── Assistant Routes (stub) ──────────────────────────────────
 
 @app.post("/assistant/chat", tags=["Assistant"])
 def chat():

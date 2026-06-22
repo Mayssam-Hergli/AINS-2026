@@ -275,43 +275,18 @@ TOOLS: list[dict] = [
         "description": (
             "Détecte les anomalies inter-modules dans le profil d'un projet. "
             "DOIT être appelé APRÈS les 5 outils de scoring — jamais avant. "
-            "Combine les réponses brutes ET les 5 scores calculés pour identifier "
-            "des contradictions invisibles dans les scores individuels "
+            "Appelle cet outil SANS paramètres (objet vide {}) : le pipeline "
+            "injecte automatiquement les réponses et les 5 scores depuis les "
+            "résultats des outils précédents. Inutile de les repasser manuellement. "
+            "Identifie des contradictions invisibles dans les scores individuels "
             "(ex: scalabilité élevée déclarée malgré forte dépendance manuelle, "
             "ou produit entièrement développé sans validation du besoin). "
-            "Retourne une liste de flags avec code, message et sévérité (high/medium). "
-            "Passer all_scores sans les 5 clés attendues lève une erreur."
+            "Retourne une liste de flags avec code, message et sévérité (high/medium)."
         ),
         "input_schema": {
             "type": "object",
-            "properties": {
-                "diagnostic_answers": {
-                    "type": "object",
-                    "description": (
-                        "Le dict complet des réponses au questionnaire — "
-                        "mêmes champs que ceux passés aux 5 outils de scoring. "
-                        "Les anomalies lisent les catégories brutes (strings) depuis "
-                        "ce dict, pas les scores numériques."
-                    ),
-                },
-                "all_scores": {
-                    "type": "object",
-                    "description": (
-                        "Dict des 5 résultats de scoring, avec exactement les clés "
-                        "'market', 'commercial', 'innovation', 'scalability', 'green'. "
-                        "Chacun est la sortie directe de l'outil de scoring correspondant."
-                    ),
-                    "properties": {
-                        "market":      {"type": "object"},
-                        "commercial":  {"type": "object"},
-                        "innovation":  {"type": "object"},
-                        "scalability": {"type": "object"},
-                        "green":       {"type": "object"},
-                    },
-                    "required": ["market", "commercial", "innovation", "scalability", "green"],
-                },
-            },
-            "required": ["diagnostic_answers", "all_scores"],
+            "properties": {},
+            "required": [],
         },
     },
 ]

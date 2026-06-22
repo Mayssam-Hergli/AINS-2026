@@ -191,19 +191,83 @@ backend/scoring/
                                professional French, addressed to a
                                Tunisian entrepreneur.
 
-  agent.py                       PENDING — the agent loop: calls
-                                 tools in fixed order (market ->
-                                 commercial -> innovation ->
-                                 scalability -> green -> anomaly),
-                                 never skips a tool, writes NL
-                                 justification only after getting
-                                 real numbers back from tools
+  llm_client.py                  DONE — single-function abstraction
+                                 run_agent_turn(system, messages, tools).
+                                 Only file that knows the active provider.
+                                 Switch with LLM_PROVIDER env var (default
+                                 "groq", also "anthropic"). For groq: uses
+                                 openai library with Groq base_url, model
+                                 llama-3.3-70b-versatile. For anthropic:
+                                 uses anthropic library, claude-sonnet-4-6.
+                                 Converts TOOLS from Anthropic schema shape
+                                 (input_schema) to OpenAI shape (parameters)
+                                 for Groq — one converter, zero duplication.
+                                 Converts OpenAI message history to Anthropic
+                                 format when provider=anthropic (groups tool
+                                 results into single user message as required
+                                 by Anthropic API). Returns normalized dict
+                                 {text, tool_calls, stop_reason} regardless
+                                 of provider — agent.py never sees a
+                                 provider-specific object.
+
+  agent.py                         DONE — run_scoring_agent(diagnostic_answers).
+                                   Drives LLM to call 6 tools in fixed order,
+                                   executes each via execute_tool (real
+                                   deterministic code), enforces the anomaly
+                                   guard at the CODE level too (not just in
+                                   the prompt): detect_all_anomalies blocked
+                                   until all 5 scores collected. Parses
+                                   LLM's final JSON justification, retries
+                                   once if malformed. Merges tool results
+                                   (deterministic numbers) with LLM output
+                                   (language layer). Returns same shape as
+                                   engine.py plus justifications +
+                                   anomaly_summary. _MAX_TURNS=12 safety cap.
+
+  test_agent.py                      DONE — live integration test (3 tests).
+                                     Skips gracefully if GROQ_API_KEY unset.
+                                     Calls agent once, caches result, reuses
+                                     across all 3 tests. Test 1 (critical):
+                                     all 5 composites + anomaly codes must
+                                     exactly match engine.compute_all_scores.
+                                     Test 2: justifications present + non-
+                                     empty for all 5 dims. Test 3: anomaly_
+                                     summary present, low_scoring + green_
+                                     pillars_flagged match engine values.
 
 backend/api/
-  scoring.py                       PENDING — FastAPI route
+  auth.py                          DONE — POST /auth/register,
+                                   POST /auth/login (OAuth2 form),
+                                   GET /auth/me.
+
+  scoring.py                       DONE — FastAPI router, 2 routes:
                                    POST /scores/compute/{profile_id}
-                                   triggers the agent, writes result
-                                   to project_profiles
+                                     Reads diagnostic_answers, runs
+                                     run_scoring_agent(), writes all 5
+                                     score objects + anomaly data to
+                                     project_profiles, appends a row to
+                                     scores_history. Atomic: either the full
+                                     result is written or nothing is (SQLite
+                                     transaction). Returns full payload
+                                     immediately (no second DB read needed).
+                                     HTTP 502 if agent fails — DB untouched.
+                                   GET /scores/{profile_id}
+                                     Returns cached scores from DB without
+                                     re-running the agent. 404 if not yet
+                                     scored.
+                                   Both routes owner-protected (user_id in
+                                   WHERE clause) + require Bearer JWT.
+
+backend/
+  database.py                      DONE — SQLite via built-in sqlite3.
+                                   get_db() dependency + init_db() on
+                                   startup. Tables: users, project_profiles,
+                                   scores_history. Swap for PostgreSQL by
+                                   replacing only this file.
+
+  security/auth.py                 DONE — JWT + pbkdf2_sha256 password
+                                   hashing. get_current_user() dependency
+                                   used by all protected routes.
 ```
 
 ### Output JSON shape — common to all 5 score modules
@@ -305,5 +369,10 @@ judging bonus point.
 | engine.py | Done, tested (3 tests: strong / overconfident-founder / incomplete) |
 | tools.py | Done, tested (7 tests: schema / routing / guard / consistency vs engine) |
 | system_prompt.py | Done (5408 chars, French, all 6 rules verified) |
-| agent.py | Pending |
-| api/scoring.py | Pending |
+| llm_client.py | Done (Groq + Anthropic branches, normalized output) |
+| agent.py | Done (loop + guard + JSON parse + merge) |
+| test_agent.py | Done (3 tests, skips without key, API called once) |
+| api/auth.py | Done (register, login, me) |
+| api/scoring.py | Done (POST compute + GET cached) |
+| database.py | Done (SQLite, swappable) |
+| security/auth.py | Done (JWT + pbkdf2_sha256) |
