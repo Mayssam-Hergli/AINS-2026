@@ -12,6 +12,7 @@ from database import init_db
 from api.auth import router as auth_router
 from api.profiles import router as profiles_router
 from api.scoring import router as scoring_router
+from api.diagnostic import router as diagnostic_router
 
 # ─── App Instance ────────────────────────────────────────────
 app = FastAPI(
@@ -55,6 +56,7 @@ def on_startup():
 app.include_router(auth_router)
 app.include_router(profiles_router)
 app.include_router(scoring_router)
+app.include_router(diagnostic_router)   # MS1 — diagnostic intake (integrated)
 
 # ─── Health ───────────────────────────────────────────────────
 @app.get("/", tags=["Health"])
@@ -72,33 +74,8 @@ def root():
 def health():
     return {"status": "healthy"}
 
-# ─── Diagnostic Routes (stub — owned by MS1) ─────────────────
-
-@app.post("/diagnostic/start", tags=["Diagnostic"])
-def start_diagnostic():
-    """
-    Démarre un nouveau diagnostic pour un entrepreneur.
-    Retourne la première question adaptée à son profil.
-    """
-    return {"message": "diagnostic start — coming Day 2"}
-
-@app.post("/diagnostic/answer", tags=["Diagnostic"])
-def submit_answer():
-    """
-    Soumet une réponse et retourne la prochaine question.
-    La logique de branchement adapte les questions selon les réponses précédentes.
-    """
-    return {"message": "diagnostic answer — coming Day 2"}
-
-@app.get("/diagnostic/result/{profile_id}", tags=["Diagnostic"])
-def get_diagnostic_result(profile_id: str):
-    """
-    Retourne le résultat complet du diagnostic:
-    - Stade de maturité classifié
-    - Gap perception vs réalité
-    - Blockers identifiés et classés
-    """
-    return {"message": f"diagnostic result for {profile_id} — coming Day 2"}
+# ─── Diagnostic (MS1) ── now served by api/diagnostic.py (mounted above) ──
+#   GET  /diagnostic/schema · POST /diagnostic/answers/{id}
 
 # ─── RAG + Roadmap Routes (stub — owned by MS3) ──────────────
 
