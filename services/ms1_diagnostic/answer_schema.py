@@ -40,10 +40,12 @@ FIELD_SPECS: tuple[FieldSpec, ...] = (
     # Market
     _enum("market_size", "market", ("small", "medium", "large", "very_large")),
     _enum("customer_interviews", "market", ("0", "1-5", "6-10", "10+")),
-    FieldSpec("has_loi", "market", "int", (0, 1, 2), required=True, default=0),
+    FieldSpec("has_loi", "market", "int", None, required=True, default=0),  # count of signed LOIs (>= 0)
     FieldSpec("has_paying_customers", "market", "bool", None, required=True, default=False),
     _enum("revenue_model_documented", "market", ("none", "draft", "documented")),
-    FieldSpec("revenue_model_type", "market", "string", None, required=False, default="undefined"),
+    _enum("revenue_model_type", "market",
+          ("subscription", "transactional", "freemium", "undefined"),
+          required=False, default="undefined"),
     # Commercial
     _enum("value_proposition_clarity", "commercial", ("none", "vague", "clear", "differentiated")),
     _enum("product_maturity", "commercial", ("idea", "prototype", "mvp", "product")),
@@ -140,6 +142,8 @@ def validate_answers(answers: dict[str, Any]) -> list[str]:
                 issues.append(f"{spec.key}: expected an integer, got {value!r}")
             elif spec.allowed is not None and coerced not in spec.allowed:
                 issues.append(f"{spec.key}: {coerced} not in {list(spec.allowed)}")
+            elif spec.allowed is None and coerced < 0:
+                issues.append(f"{spec.key}: count must be >= 0, got {coerced}")
         elif spec.kind == "bool":
             if not isinstance(value, (bool, int)) and not isinstance(value, str):
                 issues.append(f"{spec.key}: expected a boolean, got {value!r}")

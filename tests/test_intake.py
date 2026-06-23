@@ -29,7 +29,7 @@ VALID_ANSWERS = {
     "has_loi": 1,
     "has_paying_customers": True,
     "revenue_model_documented": "documented",
-    "revenue_model_type": "saas",
+    "revenue_model_type": "subscription",
     "value_proposition_clarity": "differentiated",
     "product_maturity": "mvp",
     "pricing_strategy": "defined",
@@ -83,11 +83,13 @@ def test_optional_keys_get_defaults_when_absent():
 def test_invalid_values_and_missing_required_are_rejected():
     bad = dict(VALID_ANSWERS)
     bad["market_size"] = "huge"          # not a valid enum
-    bad["has_loi"] = 5                    # out of {0,1,2}
+    bad["has_loi"] = -1                   # count must be >= 0
+    bad["revenue_model_type"] = "saas"   # no longer a valid enum value
     del bad["energy_source"]              # required, now missing
     issues = validate_answers(bad)
     assert any("market_size" in i for i in issues)
     assert any("has_loi" in i for i in issues)
+    assert any("revenue_model_type" in i for i in issues)
     assert any("energy_source" in i for i in issues)
 
 

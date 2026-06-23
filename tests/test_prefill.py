@@ -29,7 +29,7 @@ def test_suggestions_cover_expected_keys_with_valid_enums():
     assert suggestions["market_size"].suggested_value == "very_large"
     assert suggestions["product_maturity"].suggested_value == "product"
     assert suggestions["has_ip_protection"].suggested_value == "pending"
-    assert suggestions["revenue_model_type"].suggested_value == "saas"
+    assert suggestions["revenue_model_type"].suggested_value == "subscription"
 
     # Every enum suggestion is a legal value for its key (won't break the contract).
     for key, s in suggestions.items():

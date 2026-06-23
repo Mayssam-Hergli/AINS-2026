@@ -30,7 +30,7 @@ FOUNDER_ANSWERS = {
     "has_loi": 2,
     "has_paying_customers": True,
     "revenue_model_documented": "documented",
-    "revenue_model_type": "marketplace",
+    "revenue_model_type": "subscription",
     "value_proposition_clarity": "clear",
     "product_maturity": "mvp",
     "pricing_strategy": "defined",
