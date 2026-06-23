@@ -56,11 +56,11 @@
 .btn-cta-primary {
   background: #3346AC;
   color: #ffffff;
-  transition: background 0.25s ease, box-shadow 0.25s ease, transform 0.15s ease;
+  transition: background 0.25s ease, color 0.25s ease, box-shadow 0.25s ease, transform 0.15s ease;
 }
 .btn-cta-primary:hover {
-  background: #2a3a9e;
-  box-shadow: 0 8px 32px rgba(51, 70, 172, 0.25);
+  background: #F7F2EB;
+  color: #081F5C;
   transform: translateY(-1px);
 }
 .btn-cta-primary:active { transform: scale(0.97); }
@@ -72,9 +72,9 @@
   transition: background 0.25s ease, border-color 0.25s ease, color 0.25s ease, transform 0.15s ease;
 }
 .btn-cta-secondary:hover {
-  background: #F2FAF5;
-  border-color: #3DA35D;
-  color: #3DA35D;
+  background: #F7F2EB;
+  border-color: #F7F2EB;
+  color: #081F5C;
   transform: translateY(-1px);
 }
 .btn-cta-secondary:active { transform: scale(0.97); }

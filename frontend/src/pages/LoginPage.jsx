@@ -2,20 +2,25 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useLang } from '../context/LanguageContext'
-import LangToggle from '../components/LangToggle'
 import Spinner from '../components/Spinner'
 
-const SORA = { fontFamily: "'Sora', sans-serif" }
+const SORA  = { fontFamily: "'Sora', sans-serif" }
+const INTER = { fontFamily: "'Inter', sans-serif" }
 
 export default function LoginPage() {
-  const { login } = useAuth()
-  const { t, lang } = useLang()
-  const navigate = useNavigate()
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [error, setError] = useState(null)
-  const [loading, setLoading] = useState(false)
-  const L = t.login
+  const { login }              = useAuth()
+  const { t, lang, toggleLang } = useLang()
+  const navigate               = useNavigate()
+  const isAr                   = lang === 'ar'
+  const L                      = t.login
+
+  const [email,      setEmail]      = useState('')
+  const [password,   setPassword]   = useState('')
+  const [error,      setError]      = useState(null)
+  const [loading,    setLoading]    = useState(false)
+  const [emailFocus, setEmailFocus] = useState(false)
+  const [passFocus,  setPassFocus]  = useState(false)
+  const [btnHover,   setBtnHover]   = useState(false)
 
   const submit = async (e) => {
     e.preventDefault()
@@ -31,91 +36,182 @@ export default function LoginPage() {
     }
   }
 
+  const inputStyle = (focused) => ({
+    ...INTER,
+    width: '100%',
+    border: 'none',
+    outline: 'none',
+    borderRadius: '10px',
+    padding: '11px 14px',
+    fontSize: '0.9rem',
+    color: '#081F5C',
+    backgroundColor: '#FAFBFF',
+    boxShadow: focused
+      ? '0 0 0 2px #3346AC, 0 0 16px rgba(61,163,93,0.12)'
+      : '0 0 0 1.5px rgba(112,150,209,0.25)',
+    transition: 'box-shadow 0.2s ease',
+  })
+
   return (
     <div
-      dir={lang === 'ar' ? 'rtl' : 'ltr'}
+      dir={isAr ? 'rtl' : 'ltr'}
       className="min-h-screen flex flex-col"
-      style={{ background: 'linear-gradient(180deg, #081F5C 0%, #050F2E 100%)' }}
+      style={{ backgroundColor: '#FFFFFF' }}
     >
-      {/* top bar */}
-      <div className="flex items-center justify-between px-6 sm:px-10 pt-5">
-        <Link to="/" className="font-black text-white/50 text-sm tracking-[0.25em] uppercase hover:text-white/80 transition-colors" style={SORA}>
-          Massar
+      {/* Top bar */}
+      <div
+        className="flex items-center justify-between px-6 sm:px-12 py-5"
+        style={{ borderBottom: '1px solid rgba(112,150,209,0.1)' }}
+      >
+        <Link
+          to="/"
+          className="text-2xl font-black tracking-tight transition-opacity hover:opacity-70"
+          style={{ ...SORA, color: '#081F5C' }}
+        >
+          {isAr ? 'مسار' : 'Massar'}
         </Link>
-        <LangToggle dark />
+
+        {/* FR / AR toggle */}
+        <div
+          className="flex items-center p-1 rounded-full"
+          style={{ backgroundColor: '#F5F7FF', border: '1px solid rgba(112,150,209,0.18)' }}
+        >
+          <button
+            onClick={() => isAr && toggleLang()}
+            className="px-3 py-1 rounded-full text-xs font-semibold transition-all duration-200"
+            style={!isAr
+              ? { backgroundColor: '#3346AC', color: '#fff' }
+              : { color: '#7096D1' }}
+          >
+            FR
+          </button>
+          <button
+            onClick={() => !isAr && toggleLang()}
+            className="px-3 py-1 rounded-full text-xs font-semibold transition-all duration-200"
+            style={isAr
+              ? { backgroundColor: '#3346AC', color: '#fff' }
+              : { color: '#7096D1' }}
+          >
+            AR
+          </button>
+        </div>
       </div>
 
-      {/* card */}
-      <div className="flex-1 flex items-center justify-center px-4 py-12">
+      {/* Centered card */}
+      <div className="flex-1 flex items-center justify-center px-4 py-16">
         <div className="w-full max-w-md">
-          {/* heading above card */}
-          <div className="text-center mb-8">
-            <h1
-              className="font-black text-white"
-              style={{ ...SORA, fontSize: 'clamp(2.2rem, 8vw, 3.2rem)', letterSpacing: 0 }}
-            >
-              Massar
-            </h1>
-            <p className="text-white/40 text-sm mt-2 font-light">{L.subtitle}</p>
+
+          {/* Above-card heading */}
+          <div className="text-center mb-10 flex flex-col items-center">
+            <img
+              src={isAr ? '/massar-logo-ar.svg' : '/massar-logo-fr.svg'}
+              alt="Massar"
+              className="mb-1"
+              style={{ height: 'clamp(8.6rem, 26.5vw, 12.5rem)', width: 'auto', maxWidth: '96%' }}
+            />
+            <p className="text-sm" style={{ ...INTER, color: '#7096D1' }}>
+              {L.subtitle}
+            </p>
           </div>
 
+          {/* Card */}
           <div
-            className="bg-white rounded-2xl shadow-2xl p-8"
-            style={{ boxShadow: '0 0 0 1px rgba(61,163,93,0.12), 0 32px 64px rgba(5,15,46,0.5)' }}
+            className="bg-white rounded-2xl p-8"
+            style={{
+              boxShadow: '0 8px 40px rgba(51,70,172,0.08), 0 1px 4px rgba(51,70,172,0.05)',
+              border: '1px solid rgba(112,150,209,0.12)',
+              borderTop: '3px solid #3DA35D',
+            }}
           >
-            {/* green top accent bar */}
-            <div
-              className="w-12 h-0.5 rounded-full mb-6"
-              style={{ background: 'linear-gradient(90deg, #3DA35D, #2d8a4e)', boxShadow: '0 0 12px rgba(61,163,93,0.5)' }}
-            />
+            <h2 className="text-lg font-bold mb-7" style={{ ...SORA, color: '#081F5C' }}>
+              {L.title}
+            </h2>
 
-            <h2 className="text-xl font-semibold text-gray-800 mb-6" style={SORA}>{L.title}</h2>
+            <form onSubmit={submit} className="flex flex-col gap-5">
 
-            <form onSubmit={submit} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{L.email}</label>
+                <label
+                  className="block text-xs font-semibold mb-2"
+                  style={{ ...INTER, color: '#7096D1', letterSpacing: '0.03em' }}
+                >
+                  {L.email}
+                </label>
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  onFocus={() => setEmailFocus(true)}
+                  onBlur={() => setEmailFocus(false)}
                   required
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:border-transparent transition-shadow"
-                  style={{ '--tw-ring-color': '#3DA35D' }}
                   placeholder={L.email_ph}
+                  style={inputStyle(emailFocus)}
                 />
               </div>
+
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{L.password}</label>
+                <label
+                  className="block text-xs font-semibold mb-2"
+                  style={{ ...INTER, color: '#7096D1', letterSpacing: '0.03em' }}
+                >
+                  {L.password}
+                </label>
                 <input
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  onFocus={() => setPassFocus(true)}
+                  onBlur={() => setPassFocus(false)}
                   required
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:border-transparent transition-shadow"
                   placeholder={L.password_ph}
+                  style={inputStyle(passFocus)}
                 />
               </div>
 
               {error && (
-                <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                <div
+                  className="text-sm px-4 py-2.5 rounded-xl"
+                  style={{
+                    ...INTER,
+                    color: '#c0392b',
+                    backgroundColor: '#FFF5F5',
+                    border: '1px solid rgba(192,57,43,0.15)',
+                  }}
+                >
                   {error}
-                </p>
+                </div>
               )}
 
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full disabled:opacity-60 text-white font-semibold py-2.5 rounded-lg transition-all duration-200 flex items-center justify-center gap-2 hover:brightness-110 active:scale-[0.99]"
-                style={{ background: '#3346AC', marginTop: '1.25rem' }}
+                onMouseEnter={() => setBtnHover(true)}
+                onMouseLeave={() => setBtnHover(false)}
+                className="w-full flex items-center justify-center gap-2.5 py-3 rounded-xl font-semibold text-white disabled:opacity-60 active:scale-[0.99] mt-1"
+                style={{
+                  ...INTER,
+                  fontSize: '0.95rem',
+                  backgroundColor: btnHover ? '#3DA35D' : '#3346AC',
+                  boxShadow: btnHover
+                    ? '0 8px 24px rgba(61,163,93,0.25)'
+                    : '0 4px 16px rgba(51,70,172,0.18)',
+                  transition: 'background-color 0.25s ease, box-shadow 0.25s ease',
+                }}
               >
                 {loading && <Spinner size="sm" />}
                 {loading ? L.loading : L.submit}
               </button>
             </form>
 
-            <p className="mt-6 text-center text-sm text-gray-400">
+            <p
+              className="mt-7 text-center text-xs"
+              style={{ ...INTER, color: '#7096D1' }}
+            >
               {L.no_account}{' '}
-              <Link to="/register" className="font-semibold hover:underline" style={{ color: '#3DA35D' }}>
+              <Link
+                to="/register"
+                className="font-semibold transition-colors hover:underline"
+                style={{ color: '#3DA35D' }}
+              >
                 {L.register_link}
               </Link>
             </p>

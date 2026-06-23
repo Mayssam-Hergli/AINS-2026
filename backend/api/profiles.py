@@ -32,7 +32,7 @@ class UpdateAnswers(BaseModel):
 # POST /profiles  — create a new project profile
 # ---------------------------------------------------------------------------
 
-@router.post("/", status_code=201)
+@router.post("", status_code=201)
 def create_profile(
     body: CreateProfile,
     db: sqlite3.Connection = Depends(get_db),
@@ -54,7 +54,7 @@ def create_profile(
 # GET /profiles  — list all profiles owned by the current user
 # ---------------------------------------------------------------------------
 
-@router.get("/")
+@router.get("")
 def list_profiles(
     db: sqlite3.Connection = Depends(get_db),
     current_user: dict = Depends(get_current_user),
