@@ -1,87 +1,44 @@
 """
-SQLite database layer.
+Supabase PostgreSQL database layer — replaces the previous SQLite module.
 
-Uses Python's built-in sqlite3 — no additional packages required.
-FastAPI runs sync route functions in a thread pool via anyio, so blocking
-sqlite3 calls are safe inside sync route handlers.
+Tables already exist in Supabase (users, projects, diagnostics, roadmaps,
+roadmap_steps, chat_sessions, chat_messages, knowledge_base) — this file
+never creates or alters schema, only connects and runs parameterized
+queries against it.
 
-To migrate to PostgreSQL later, swap this module for one that provides
-an equivalent get_db() generator yielding a psycopg2/asyncpg connection.
-The rest of the codebase only imports get_db and init_db from here.
+Connects via SUPABASE_DB_URL (read from .env, never logged or printed).
+Uses psycopg2 with RealDictCursor so rows behave like dicts, matching the
+sqlite3.Row interface the rest of the codebase was already written against
+(row["column_name"] works the same way it did before).
 """
-import sqlite3
 import os
-from typing import Generator
+from contextlib import contextmanager
+from typing import Generator, Optional
 
-DATABASE_PATH = os.getenv("DATABASE_PATH", "ains.db")
+import psycopg2
+import psycopg2.extras
+
+SUPABASE_DB_URL = os.getenv("SUPABASE_DB_URL")
 
 
-def init_db(path: str = DATABASE_PATH) -> None:
-    """Create all tables if they don't exist. Called once at app startup."""
-    conn = sqlite3.connect(path, check_same_thread=False)
+def get_connection() -> Optional[psycopg2.extensions.connection]:
+    """
+    Returns a raw psycopg2 connection, or None if it can't connect.
+    Used for one-off/manual checks (e.g. `python -c "from database import
+    get_connection; ..."`). Route code should use get_db() instead, which
+    manages commit/rollback/close automatically.
+    """
+    if not SUPABASE_DB_URL:
+        return None
     try:
-        conn.executescript("""
-            PRAGMA foreign_keys = ON;
-
-            CREATE TABLE IF NOT EXISTS users (
-                id               TEXT PRIMARY KEY,
-                email            TEXT UNIQUE NOT NULL,
-                hashed_password  TEXT NOT NULL,
-                created_at       TEXT DEFAULT (datetime('now'))
-            );
-
-            CREATE TABLE IF NOT EXISTS project_profiles (
-                id                     TEXT PRIMARY KEY,
-                user_id                TEXT NOT NULL REFERENCES users(id),
-                name                   TEXT,
-                diagnostic_answers     TEXT,
-                market_score           TEXT,
-                commercial_score       TEXT,
-                innovation_score       TEXT,
-                scalability_score      TEXT,
-                green_score            TEXT,
-                anomaly_flags          TEXT,
-                low_scoring_dimensions TEXT,
-                green_pillars_flagged  TEXT,
-                justifications         TEXT,
-                anomaly_summary        TEXT,
-                created_at             TEXT DEFAULT (datetime('now')),
-                updated_at             TEXT DEFAULT (datetime('now'))
-            );
-
-            CREATE TABLE IF NOT EXISTS scores_history (
-                id          TEXT PRIMARY KEY,
-                profile_id  TEXT NOT NULL REFERENCES project_profiles(id),
-                market      REAL,
-                commercial  REAL,
-                innovation  REAL,
-                scalability REAL,
-                green       REAL,
-                computed_at TEXT DEFAULT (datetime('now'))
-            );
-        """)
-        conn.commit()
-        # Migration: add name column to existing databases
-        try:
-            conn.execute("ALTER TABLE project_profiles ADD COLUMN name TEXT")
-            conn.commit()
-        except Exception:
-            pass  # column already exists
-        # Migration: add roadmap column (MS3 — cached generated roadmap JSON)
-        try:
-            conn.execute("ALTER TABLE project_profiles ADD COLUMN roadmap TEXT")
-            conn.commit()
-        except Exception:
-            pass  # column already exists
-    finally:
-        conn.close()
+        return psycopg2.connect(SUPABASE_DB_URL, cursor_factory=psycopg2.extras.RealDictCursor)
+    except psycopg2.OperationalError:
+        return None
 
 
-def get_db() -> Generator[sqlite3.Connection, None, None]:
-    """FastAPI dependency that yields an open SQLite connection per request."""
-    conn = sqlite3.connect(DATABASE_PATH, check_same_thread=False)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON")
+def get_db() -> Generator[psycopg2.extensions.connection, None, None]:
+    """FastAPI dependency that yields an open Supabase connection per request."""
+    conn = psycopg2.connect(SUPABASE_DB_URL, cursor_factory=psycopg2.extras.RealDictCursor)
     try:
         yield conn
         conn.commit()
@@ -90,3 +47,26 @@ def get_db() -> Generator[sqlite3.Connection, None, None]:
         raise
     finally:
         conn.close()
+
+
+@contextmanager
+def db_cursor(conn: psycopg2.extensions.connection):
+    """Small helper: route files were written against sqlite3's
+    conn.execute(...).fetchone()/.fetchall() API. psycopg2 requires a
+    cursor. This wraps cursor creation/closing so call sites read
+    `with db_cursor(db) as cur: cur.execute(...)` instead of restructuring
+    every route to manage cursors by hand."""
+    cur = conn.cursor()
+    try:
+        yield cur
+    finally:
+        cur.close()
+
+
+def init_db() -> None:
+    """
+    No-op — kept only so main.py's existing startup hook doesn't need to
+    change. Supabase tables already exist; this layer must never create or
+    alter them.
+    """
+    return None

@@ -8,15 +8,15 @@ JWT_SECRET_KEY must be set in the environment for production.
 The default "dev-secret" value is intentionally weak — it must be replaced.
 """
 import os
-import sqlite3
 from datetime import datetime, timedelta, timezone
 
+import psycopg2.extensions
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 
-from database import get_db
+from database import get_db, db_cursor
 
 SECRET_KEY = os.getenv("JWT_SECRET_KEY", "dev-secret-change-in-production")
 ALGORITHM = "HS256"
@@ -41,7 +41,7 @@ def create_access_token(user_id: str) -> str:
 
 def get_current_user(
     token: str = Depends(oauth2_scheme),
-    db: sqlite3.Connection = Depends(get_db),
+    db: psycopg2.extensions.connection = Depends(get_db),
 ) -> dict:
     """FastAPI dependency — resolves the Bearer token to a user dict or raises 401."""
     credentials_exception = HTTPException(
@@ -57,9 +57,9 @@ def get_current_user(
     except JWTError:
         raise credentials_exception
 
-    row = db.execute(
-        "SELECT id, email FROM users WHERE id = ?", (user_id,)
-    ).fetchone()
+    with db_cursor(db) as cur:
+        cur.execute("SELECT id, email, full_name, role FROM users WHERE id = %s", (user_id,))
+        row = cur.fetchone()
     if row is None:
         raise credentials_exception
     return dict(row)

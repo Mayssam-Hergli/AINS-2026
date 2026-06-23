@@ -1,40 +1,67 @@
 """
-MS2 Scoring API routes.
+MS2 Scoring API routes — now backed by Supabase's "diagnostics" table
+instead of SQLite's "project_profiles". The scoring engine itself
+(scoring/agent.py, scoring/engine.py, etc.) is UNTOUCHED — only how this
+route reads diagnostic answers and writes results changed.
 
 POST /scores/compute/{profile_id}
-    Reads diagnostic_answers from project_profiles, runs the scoring agent,
-    writes all 5 score objects + anomaly data back to project_profiles, and
-    appends a row to scores_history. Returns the full payload immediately so
-    the frontend can render without a second DB read.
+    Reads diagnostics.raw_responses (JSONB) for the project's most recent
+    diagnostic row, runs the scoring agent unchanged, writes the full
+    result bundle into diagnostics.scores (JSONB) on that same row, plus
+    a derived diagnostics.maturity_stage and diagnostics.key_weaknesses.
 
 GET /scores/{profile_id}
-    Returns the already-computed scores from project_profiles without re-running
-    the agent. Use this for page loads — never pays the LLM cost again.
+    Returns the cached bundle from diagnostics.scores without re-running
+    the agent.
 
-Both routes are owner-protected: the WHERE clause includes user_id = current_user,
-so a user can only access their own profiles.
+SCHEMA GAP, flagged rather than silently dropped: Supabase's schema has
+no "scores_history" table (SQLite's project_profiles had one, tracking
+score evolution over time, read by /roadmap/evaluate-progress for
+"previous_score"). Every POST /scores/compute now overwrites the single
+diagnostics.scores value — there is no longer any history to look back
+at. If you want that back, ask your teammate for a scores_history table
+keyed on diagnostic_id; nothing here invents one.
 
-Error contract:
-- 400  profile has no diagnostic_answers
+Both routes are owner-protected via a join through projects.user_id.
+
+Error contract (unchanged):
+- 400  no diagnostic / no raw_responses yet
 - 404  profile not found (or wrong owner)
 - 502  agent failed OR agent returned no valid composites
-        → in both 502 cases, NOTHING is written to the DB (atomic: all or nothing)
+        → in both 502 cases, NOTHING is written to the DB
 """
-import json
 import logging
-import sqlite3
 import uuid
-from datetime import datetime, timezone
 
+import psycopg2.extensions
+import psycopg2.extras
 from fastapi import APIRouter, Depends, HTTPException
 
-from database import get_db
+from database import get_db, db_cursor
 from security.auth import get_current_user
 from scoring.agent import run_scoring_agent
+from rag.roadmap import derive_maturity_stage
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/scores", tags=["Scoring"])
+
+
+def _load_latest_diagnostic(cur, profile_id: str, user_id: str):
+    """Owner-checked fetch of the project's most recent diagnostic row."""
+    cur.execute(
+        """
+        SELECT d.id AS diagnostic_id, d.raw_responses, d.scores
+        FROM diagnostics d
+        JOIN projects p ON p.id = d.project_id
+        WHERE d.project_id = %s AND p.user_id = %s
+        ORDER BY d.completed_at DESC NULLS LAST
+        LIMIT 1
+        """,
+        (profile_id, user_id),
+    )
+    return cur.fetchone()
+
 
 # ---------------------------------------------------------------------------
 # POST /scores/compute/{profile_id}
@@ -43,53 +70,47 @@ router = APIRouter(prefix="/scores", tags=["Scoring"])
 @router.post("/compute/{profile_id}")
 def compute_scores(
     profile_id: str,
-    db: sqlite3.Connection = Depends(get_db),
+    db: psycopg2.extensions.connection = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
     """
-    Run the MS2 scoring agent for this profile.
+    Run the MS2 scoring agent for this project.
 
     Expensive call (LLM): 30-60 s depending on provider.
-    Only call this after the diagnostic is complete and diagnostic_answers
-    have been written to project_profiles by MS1.
+    Only call this after the diagnostic is complete and raw_responses have
+    been written to diagnostics by MS1.
     """
-    # 1. Validate UUID format
     try:
         uuid.UUID(profile_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid profile_id format")
 
-    # 2. Fetch profile — user_id check baked into the query (no separate ownership check)
-    row = db.execute(
-        "SELECT * FROM project_profiles WHERE id = ? AND user_id = ?",
-        (profile_id, current_user["id"]),
-    ).fetchone()
-    if row is None:
-        raise HTTPException(status_code=404, detail="Profile not found")
+    with db_cursor(db) as cur:
+        # Ownership check first — projects must exist and belong to this user,
+        # independent of whether a diagnostic row exists yet.
+        cur.execute(
+            "SELECT id FROM projects WHERE id = %s AND user_id = %s",
+            (profile_id, current_user["id"]),
+        )
+        if cur.fetchone() is None:
+            raise HTTPException(status_code=404, detail="Profile not found")
 
-    # 3. Validate diagnostic_answers
-    raw_answers = row["diagnostic_answers"]
-    if not raw_answers:
+        diagnostic = _load_latest_diagnostic(cur, profile_id, current_user["id"])
+
+    if diagnostic is None or not diagnostic["raw_responses"]:
         raise HTTPException(
             status_code=400,
-            detail=(
-                "Profile has no diagnostic_answers. "
-                "Complete the MS1 diagnostic first."
-            ),
+            detail="Profile has no diagnostic answers. Complete the MS1 diagnostic first.",
         )
-    try:
-        diagnostic_answers = json.loads(raw_answers)
-    except json.JSONDecodeError:
-        raise HTTPException(
-            status_code=500, detail="Profile diagnostic_answers is not valid JSON"
-        )
+
+    diagnostic_answers = diagnostic["raw_responses"]  # psycopg2 decodes JSONB to dict already
     if not diagnostic_answers:
         raise HTTPException(
             status_code=400,
-            detail="Profile diagnostic_answers is empty. Complete the diagnostic first.",
+            detail="Profile diagnostic answers are empty. Complete the diagnostic first.",
         )
 
-    # 4. Run the scoring agent (blocking; FastAPI runs sync routes in a thread pool)
+    # Run the scoring agent (blocking; FastAPI runs sync routes in a thread pool) — UNCHANGED
     try:
         agent_result = run_scoring_agent(diagnostic_answers)
     except Exception as exc:
@@ -99,81 +120,41 @@ def compute_scores(
             detail=f"Scoring agent failed: {exc}. No data was written.",
         )
 
-    # 5. Guard: at least one valid composite must exist before we touch the DB
     scores = agent_result.get("scores", {})
-    if not scores or not any(
-        s.get("composite") is not None for s in scores.values()
-    ):
+    if not scores or not any(s.get("composite") is not None for s in scores.values()):
         raise HTTPException(
             status_code=502,
-            detail=(
-                "Scoring agent returned no valid composite scores. "
-                "No data was written."
-            ),
+            detail="Scoring agent returned no valid composite scores. No data was written.",
         )
 
-    # 6. Write atomically — sqlite3 connection is in a transaction via get_db()
-    #    Either both the UPDATE and the INSERT succeed, or get_db() rolls back both.
-    now = datetime.now(timezone.utc).isoformat()
+    scores_bundle = {
+        **scores,
+        "anomaly_flags": agent_result.get("anomaly_flags", []),
+        "low_scoring_dimensions": agent_result.get("low_scoring_dimensions", []),
+        "green_pillars_flagged": agent_result.get("green_pillars_flagged", []),
+        "justifications": agent_result.get("justifications", {}),
+        "anomaly_summary": agent_result.get("anomaly_summary", ""),
+    }
+    maturity_stage = derive_maturity_stage(scores, diagnostic_answers)
+    # "key_weaknesses" has no declared type in the schema given — assumed TEXT,
+    # storing the anomaly summary sentence. If it's actually an array column,
+    # this insert will fail; tell your teammate which type it really is.
+    key_weaknesses = agent_result.get("anomaly_summary") or None
 
-    db.execute(
-        """
-        UPDATE project_profiles SET
-            market_score           = ?,
-            commercial_score       = ?,
-            innovation_score       = ?,
-            scalability_score      = ?,
-            green_score            = ?,
-            anomaly_flags          = ?,
-            low_scoring_dimensions = ?,
-            green_pillars_flagged  = ?,
-            justifications         = ?,
-            anomaly_summary        = ?,
-            updated_at             = ?
-        WHERE id = ?
-        """,
-        (
-            json.dumps(scores.get("market")),
-            json.dumps(scores.get("commercial")),
-            json.dumps(scores.get("innovation")),
-            json.dumps(scores.get("scalability")),
-            json.dumps(scores.get("green")),
-            json.dumps(agent_result.get("anomaly_flags", [])),
-            json.dumps(agent_result.get("low_scoring_dimensions", [])),
-            json.dumps(agent_result.get("green_pillars_flagged", [])),
-            json.dumps(agent_result.get("justifications", {})),
-            agent_result.get("anomaly_summary", ""),
-            now,
-            profile_id,
-        ),
-    )
-
-    db.execute(
-        """
-        INSERT INTO scores_history
-            (id, profile_id, market, commercial, innovation, scalability, green)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-        """,
-        (
-            str(uuid.uuid4()),
-            profile_id,
-            _composite(scores, "market"),
-            _composite(scores, "commercial"),
-            _composite(scores, "innovation"),
-            _composite(scores, "scalability"),
-            _composite(scores, "green"),
-        ),
-    )
-    # Commit happens in get_db() when the dependency exits cleanly
+    with db_cursor(db) as cur:
+        cur.execute(
+            "UPDATE diagnostics SET scores = %s, maturity_stage = %s, key_weaknesses = %s WHERE id = %s",
+            (psycopg2.extras.Json(scores_bundle), maturity_stage, key_weaknesses, diagnostic["diagnostic_id"]),
+        )
 
     return {
         "profile_id": profile_id,
         "scores": scores,
-        "anomaly_flags":          agent_result.get("anomaly_flags", []),
+        "anomaly_flags": agent_result.get("anomaly_flags", []),
         "low_scoring_dimensions": agent_result.get("low_scoring_dimensions", []),
-        "green_pillars_flagged":  agent_result.get("green_pillars_flagged", []),
-        "justifications":         agent_result.get("justifications", {}),
-        "anomaly_summary":        agent_result.get("anomaly_summary", ""),
+        "green_pillars_flagged": agent_result.get("green_pillars_flagged", []),
+        "justifications": agent_result.get("justifications", {}),
+        "anomaly_summary": agent_result.get("anomaly_summary", ""),
     }
 
 
@@ -184,65 +165,40 @@ def compute_scores(
 @router.get("/{profile_id}")
 def get_scores(
     profile_id: str,
-    db: sqlite3.Connection = Depends(get_db),
+    db: psycopg2.extensions.connection = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    """
-    Return cached scores without re-running the agent.
-
-    Returns 404 if the profile has never been scored yet —
-    the caller should POST to /scores/compute/{profile_id} first.
-    """
+    """Return cached scores without re-running the agent."""
     try:
         uuid.UUID(profile_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid profile_id format")
 
-    row = db.execute(
-        "SELECT * FROM project_profiles WHERE id = ? AND user_id = ?",
-        (profile_id, current_user["id"]),
-    ).fetchone()
-    if row is None:
-        raise HTTPException(status_code=404, detail="Profile not found")
+    with db_cursor(db) as cur:
+        diagnostic = _load_latest_diagnostic(cur, profile_id, current_user["id"])
 
-    if row["market_score"] is None:
+    if diagnostic is None:
+        raise HTTPException(status_code=404, detail="Profile not found or has no diagnostic yet")
+
+    bundle = diagnostic["scores"]
+    if not bundle:
         raise HTTPException(
             status_code=404,
-            detail=(
-                "Scores not yet computed for this profile. "
-                "POST to /scores/compute/{profile_id} first."
-            ),
+            detail="Scores not yet computed for this profile. POST to /scores/compute/{profile_id} first.",
         )
 
     return {
         "profile_id": profile_id,
         "scores": {
-            "market":      _parse_json(row["market_score"]),
-            "commercial":  _parse_json(row["commercial_score"]),
-            "innovation":  _parse_json(row["innovation_score"]),
-            "scalability": _parse_json(row["scalability_score"]),
-            "green":       _parse_json(row["green_score"]),
+            "market": bundle.get("market"),
+            "commercial": bundle.get("commercial"),
+            "innovation": bundle.get("innovation"),
+            "scalability": bundle.get("scalability"),
+            "green": bundle.get("green"),
         },
-        "anomaly_flags":          _parse_json(row["anomaly_flags"]) or [],
-        "low_scoring_dimensions": _parse_json(row["low_scoring_dimensions"]) or [],
-        "green_pillars_flagged":  _parse_json(row["green_pillars_flagged"]) or [],
-        "justifications":         _parse_json(row["justifications"]) or {},
-        "anomaly_summary":        row["anomaly_summary"] or "",
+        "anomaly_flags": bundle.get("anomaly_flags", []),
+        "low_scoring_dimensions": bundle.get("low_scoring_dimensions", []),
+        "green_pillars_flagged": bundle.get("green_pillars_flagged", []),
+        "justifications": bundle.get("justifications", {}),
+        "anomaly_summary": bundle.get("anomaly_summary", ""),
     }
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-def _composite(scores: dict, dim: str) -> float | None:
-    return (scores.get(dim) or {}).get("composite")
-
-
-def _parse_json(value: str | None):
-    if value is None:
-        return None
-    try:
-        return json.loads(value)
-    except (json.JSONDecodeError, TypeError):
-        return None

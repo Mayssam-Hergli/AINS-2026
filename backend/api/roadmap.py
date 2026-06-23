@@ -1,66 +1,73 @@
 """
-MS3 — Roadmap API routes, integrated from MS3/backend/main.py into this
-backend's FastAPI app (no separate MS3 server). Reads MS2's scores and
-MS1's diagnostic_answers straight from project_profiles — same database,
-same profile_id, no duplicated state.
+MS3 — Roadmap API routes, now backed by Supabase's normalized roadmap
+tables (roadmaps -> roadmap_steps, chat_sessions -> chat_messages)
+instead of a single JSON blob column.
 
-  POST /roadmap/generate/{profile_id}   — build + cache a roadmap from the
-                                           profile's current scores
-  GET  /roadmap/{profile_id}            — return the cached roadmap
-  POST /roadmap/chat                    — contextual chat grounded in the
-                                           profile's real scores/anomalies
-  POST /roadmap/evaluate-progress       — progress score grounded in the
-                                           profile's real anomaly history
+  POST /roadmap/generate/{profile_id}   — build a roadmap from the
+                                           project's latest diagnostic +
+                                           scores, persist it normalized
+  GET  /roadmap/{profile_id}            — read the latest roadmap back,
+                                           joining roadmap_steps + knowledge_base
+  POST /roadmap/chat                    — contextual chat, persisted in
+                                           chat_sessions/chat_messages
+  POST /roadmap/evaluate-progress       — progress score (see SCHEMA GAP below)
 
-Owner-protected like profiles/scoring: every query's WHERE clause includes
-user_id = current_user["id"].
+SCHEMA GAP, flagged rather than silently dropped: there is no
+scores_history table in Supabase, so "previous_score" (the entrepreneur's
+score before their latest action) has no source of truth — it's always
+None here. The old SQLite version read scores_history for this. Ask your
+teammate for a history table keyed on diagnostic_id if you want it back.
+
+SCHEMA GAP #2: roadmap_steps.referenced_kb_id is a SINGLE FK, but a step
+can legitimately cite multiple KB resources (our LLM output's resources[]
+is a list). Only the first resource is stored as referenced_kb_id; the
+rest are folded into the step's description text so nothing is silently
+dropped. A roadmap_step_resources join table would fix this properly —
+flagging it rather than guessing your teammate wants extra rows per step.
+
+SCHEMA GAP #3: roadmap_steps.status has no documented enum/default —
+defaulted to "pending" here; confirm the real allowed values.
+
+Owner-protected throughout via a join through projects.user_id.
 """
 
-import json
-import sqlite3
+import uuid
+from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
+import psycopg2.extensions
+import psycopg2.extras
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from database import get_db
+from database import get_db, db_cursor
 from security.auth import get_current_user
 from rag.roadmap import generate_roadmap, evaluate_progress, contextual_chat, derive_maturity_stage
 
 router = APIRouter(prefix="/roadmap", tags=["Roadmap (MS3)"])
 
-# In-memory chat session store — mirrors MS3's original design (not
-# persisted; fine for a demo, would move to a table for production).
-_active_chat_sessions: Dict[str, List[Dict[str, str]]] = {}
+DEFAULT_STEP_STATUS = "pending"  # see SCHEMA GAP #3 above
 
 
-def _load_profile(db: sqlite3.Connection, profile_id: str, user_id: str) -> sqlite3.Row:
-    row = db.execute(
-        "SELECT * FROM project_profiles WHERE id = ? AND user_id = ?",
+def _load_project_and_diagnostic(cur, profile_id: str, user_id: str):
+    cur.execute(
+        "SELECT id FROM projects WHERE id = %s AND user_id = %s",
         (profile_id, user_id),
-    ).fetchone()
-    if row is None:
+    )
+    if cur.fetchone() is None:
         raise HTTPException(status_code=404, detail="Profile not found")
-    return row
 
-
-def _parse_json(value, default):
-    if not value:
-        return default
-    try:
-        return json.loads(value)
-    except (json.JSONDecodeError, TypeError):
-        return default
-
-
-def _scores_from_row(row: sqlite3.Row) -> dict:
-    return {
-        "market": _parse_json(row["market_score"], None),
-        "commercial": _parse_json(row["commercial_score"], None),
-        "innovation": _parse_json(row["innovation_score"], None),
-        "scalability": _parse_json(row["scalability_score"], None),
-        "green": _parse_json(row["green_score"], None),
-    }
+    cur.execute(
+        """
+        SELECT id AS diagnostic_id, raw_responses, scores
+        FROM diagnostics
+        WHERE project_id = %s
+        ORDER BY completed_at DESC NULLS LAST
+        LIMIT 1
+        """,
+        (profile_id,),
+    )
+    return cur.fetchone()
 
 
 # ---------------------------------------------------------------------------
@@ -70,39 +77,78 @@ def _scores_from_row(row: sqlite3.Row) -> dict:
 @router.post("/generate/{profile_id}")
 def generate(
     profile_id: str,
-    db: sqlite3.Connection = Depends(get_db),
+    db: psycopg2.extensions.connection = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    row = _load_profile(db, profile_id, current_user["id"])
+    with db_cursor(db) as cur:
+        diagnostic = _load_project_and_diagnostic(cur, profile_id, current_user["id"])
 
-    diagnostic_answers = _parse_json(row["diagnostic_answers"], None)
-    if not diagnostic_answers:
-        raise HTTPException(status_code=400, detail="Profile has no diagnostic_answers. Complete the diagnostic first.")
+        if diagnostic is None or not diagnostic["raw_responses"]:
+            raise HTTPException(status_code=400, detail="Profile has no diagnostic answers. Complete the diagnostic first.")
+        if not diagnostic["scores"]:
+            raise HTTPException(status_code=400, detail="Profile has no scores yet. POST /scores/compute/{profile_id} first.")
 
-    if row["market_score"] is None:
-        raise HTTPException(status_code=400, detail="Profile has no scores yet. POST /scores/compute/{profile_id} first.")
+        diagnostic_answers = diagnostic["raw_responses"]
+        bundle = diagnostic["scores"]
+        scores = {
+            "market": bundle.get("market"),
+            "commercial": bundle.get("commercial"),
+            "innovation": bundle.get("innovation"),
+            "scalability": bundle.get("scalability"),
+            "green": bundle.get("green"),
+        }
+        anomaly_flags = bundle.get("anomaly_flags", [])
+        low_scoring_dimensions = bundle.get("low_scoring_dimensions", [])
 
-    scores = _scores_from_row(row)
-    anomaly_flags = _parse_json(row["anomaly_flags"], [])
-    low_scoring_dimensions = _parse_json(row["low_scoring_dimensions"], [])
+        try:
+            roadmap_json = generate_roadmap(
+                profile_id=profile_id,
+                diagnostic_answers=diagnostic_answers,
+                scores=scores,
+                anomaly_flags=anomaly_flags,
+                low_scoring_dimensions=low_scoring_dimensions,
+            )
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail=f"Roadmap generation failed: {exc}")
 
-    try:
-        roadmap = generate_roadmap(
-            profile_id=profile_id,
-            diagnostic_answers=diagnostic_answers,
-            scores=scores,
-            anomaly_flags=anomaly_flags,
-            low_scoring_dimensions=low_scoring_dimensions,
+        roadmap_id = str(uuid.uuid4())
+        cur.execute(
+            "INSERT INTO roadmaps (id, project_id, diagnostic_id, maturity_stage_snapshot, generated_at) VALUES (%s, %s, %s, %s, %s)",
+            (roadmap_id, profile_id, diagnostic["diagnostic_id"], roadmap_json["maturity_stage"], datetime.now(timezone.utc)),
         )
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Roadmap generation failed: {exc}")
 
-    db.execute(
-        "UPDATE project_profiles SET roadmap = ? WHERE id = ?",
-        (json.dumps(roadmap), profile_id),
-    )
+        for step in roadmap_json.get("steps", []):
+            resources = step.get("resources", [])
+            referenced_kb_id = None
+            extra_resources_note = ""
+            if resources:
+                first_kb_id = resources[0].get("source_id")
+                cur.execute("SELECT id FROM knowledge_base WHERE kb_id = %s", (first_kb_id,))
+                kb_row = cur.fetchone()
+                referenced_kb_id = kb_row["id"] if kb_row else None
+                if len(resources) > 1:
+                    extra_titles = ", ".join(r.get("title", r.get("source_id", "")) for r in resources[1:])
+                    extra_resources_note = f" (voir aussi: {extra_titles})"
 
-    return {"profile_id": profile_id, "status": "success", "data": roadmap}
+            cur.execute(
+                """
+                INSERT INTO roadmap_steps
+                    (id, roadmap_id, step_order, title, time_horizon, description, status, referenced_kb_id)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    str(uuid.uuid4()),
+                    roadmap_id,
+                    step.get("order"),
+                    step.get("title"),
+                    step.get("time_horizon"),
+                    (step.get("explanation") or "") + extra_resources_note,
+                    DEFAULT_STEP_STATUS,
+                    referenced_kb_id,
+                ),
+            )
+
+    return {"profile_id": profile_id, "status": "success", "data": roadmap_json}
 
 
 # ---------------------------------------------------------------------------
@@ -112,13 +158,64 @@ def generate(
 @router.get("/{profile_id}")
 def get_cached(
     profile_id: str,
-    db: sqlite3.Connection = Depends(get_db),
+    db: psycopg2.extensions.connection = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    row = _load_profile(db, profile_id, current_user["id"])
-    if not row["roadmap"]:
-        raise HTTPException(status_code=404, detail="Roadmap not yet generated. POST /roadmap/generate/{profile_id} first.")
-    return {"profile_id": profile_id, "status": "success", "data": json.loads(row["roadmap"])}
+    with db_cursor(db) as cur:
+        cur.execute(
+            "SELECT id FROM projects WHERE id = %s AND user_id = %s",
+            (profile_id, current_user["id"]),
+        )
+        if cur.fetchone() is None:
+            raise HTTPException(status_code=404, detail="Profile not found")
+
+        cur.execute(
+            "SELECT id, maturity_stage_snapshot, generated_at FROM roadmaps WHERE project_id = %s ORDER BY generated_at DESC LIMIT 1",
+            (profile_id,),
+        )
+        roadmap_row = cur.fetchone()
+        if roadmap_row is None:
+            raise HTTPException(status_code=404, detail="Roadmap not yet generated. POST /roadmap/generate/{profile_id} first.")
+
+        cur.execute(
+            """
+            SELECT rs.step_order, rs.title, rs.time_horizon, rs.description, rs.status,
+                   kb.kb_id, kb.title AS kb_title, kb.type AS kb_type, kb.source_url
+            FROM roadmap_steps rs
+            LEFT JOIN knowledge_base kb ON kb.id = rs.referenced_kb_id
+            WHERE rs.roadmap_id = %s
+            ORDER BY rs.step_order
+            """,
+            (roadmap_row["id"],),
+        )
+        step_rows = cur.fetchall()
+
+    steps = []
+    for r in step_rows:
+        resources = []
+        if r["kb_id"]:
+            resources.append({
+                "source_id": r["kb_id"],
+                "title": r["kb_title"],
+                "type": r["kb_type"],
+                "link": r["source_url"],
+            })
+        steps.append({
+            "order": r["step_order"],
+            "title": r["title"],
+            "time_horizon": r["time_horizon"],
+            "explanation": r["description"],
+            "status": r["status"],
+            "resources": resources,
+        })
+
+    data = {
+        "project_id": profile_id,
+        "generated_at": roadmap_row["generated_at"].isoformat() if roadmap_row["generated_at"] else None,
+        "maturity_stage": roadmap_row["maturity_stage_snapshot"],
+        "steps": steps,
+    }
+    return {"profile_id": profile_id, "status": "success", "data": data}
 
 
 # ---------------------------------------------------------------------------
@@ -133,27 +230,23 @@ class ProgressPayload(BaseModel):
 @router.post("/evaluate-progress")
 def evaluate(
     payload: ProgressPayload,
-    db: sqlite3.Connection = Depends(get_db),
+    db: psycopg2.extensions.connection = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    row = _load_profile(db, payload.profile_id, current_user["id"])
-    diagnostic_answers = _parse_json(row["diagnostic_answers"], {})
-    scores = _scores_from_row(row)
-    anomaly_flags = _parse_json(row["anomaly_flags"], [])
+    with db_cursor(db) as cur:
+        diagnostic = _load_project_and_diagnostic(cur, payload.profile_id, current_user["id"])
+
+    diagnostic_answers = (diagnostic["raw_responses"] if diagnostic else None) or {}
+    bundle = (diagnostic["scores"] if diagnostic else None) or {}
+    scores = {k: bundle.get(k) for k in ("market", "commercial", "innovation", "scalability", "green")}
+    anomaly_flags = bundle.get("anomaly_flags", [])
 
     current_stage = derive_maturity_stage(scores, diagnostic_answers)
-
-    prev = db.execute(
-        "SELECT market, commercial, innovation, scalability, green FROM scores_history WHERE profile_id = ? ORDER BY computed_at DESC LIMIT 1",
-        (payload.profile_id,),
-    ).fetchone()
+    # No scores_history table in Supabase — see module docstring SCHEMA GAP.
     previous_score = None
-    if prev:
-        vals = [v for v in (prev["market"], prev["commercial"], prev["innovation"], prev["scalability"], prev["green"]) if v is not None]
-        previous_score = round(sum(vals) / len(vals), 1) if vals else None
 
     remaining_gaps = [
-        {"domain": f["code"], "description": f.get("message", ""), "severity": f.get("severity", "medium")}
+        {"domain": f.get("code"), "description": f.get("message", ""), "severity": f.get("severity", "medium")}
         for f in anomaly_flags
     ]
 
@@ -185,30 +278,60 @@ class ChatPayload(BaseModel):
 @router.post("/chat")
 def chat(
     payload: ChatPayload,
-    db: sqlite3.Connection = Depends(get_db),
+    db: psycopg2.extensions.connection = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    row = _load_profile(db, payload.profile_id, current_user["id"])
-    diagnostic_answers = _parse_json(row["diagnostic_answers"], {})
-    scores = _scores_from_row(row)
-    anomaly_flags = _parse_json(row["anomaly_flags"], [])
+    with db_cursor(db) as cur:
+        diagnostic = _load_project_and_diagnostic(cur, payload.profile_id, current_user["id"])
+        diagnostic_answers = (diagnostic["raw_responses"] if diagnostic else None) or {}
+        bundle = (diagnostic["scores"] if diagnostic else None) or {}
+        scores = {k: bundle.get(k) for k in ("market", "commercial", "innovation", "scalability", "green")}
+        anomaly_flags = bundle.get("anomaly_flags", [])
 
-    current_stage = derive_maturity_stage(scores, diagnostic_answers)
-    key_weakness = anomaly_flags[0]["message"] if anomaly_flags else "Aucune faiblesse critique identifiée."
+        current_stage = derive_maturity_stage(scores, diagnostic_answers)
+        key_weakness = anomaly_flags[0]["message"] if anomaly_flags else "Aucune faiblesse critique identifiée."
 
-    history = _active_chat_sessions.setdefault(payload.session_id, [])
+        # session_id from the client must be a UUID to satisfy chat_sessions.id —
+        # create the row on first use, then replay prior messages for context.
+        try:
+            uuid.UUID(payload.session_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="session_id must be a UUID")
 
-    try:
-        reply = contextual_chat(
-            session_history=history,
-            new_message=payload.new_message,
-            sector="Non renseigné",
-            current_stage=current_stage,
-            key_weakness=key_weakness,
-            component_title=payload.clicked_component.title,
-            component_description=payload.clicked_component.description,
+        cur.execute("SELECT id FROM chat_sessions WHERE id = %s", (payload.session_id,))
+        if cur.fetchone() is None:
+            cur.execute(
+                "INSERT INTO chat_sessions (id, project_id, roadmap_step_id) VALUES (%s, %s, %s)",
+                (payload.session_id, payload.profile_id, payload.clicked_component.step_id),
+            )
+
+        cur.execute(
+            "SELECT role, content FROM chat_messages WHERE session_id = %s ORDER BY created_at",
+            (payload.session_id,),
         )
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Chat failed: {exc}")
+        history: List[Dict[str, str]] = [dict(r) for r in cur.fetchall()]
+
+        try:
+            reply = contextual_chat(
+                session_history=history,
+                new_message=payload.new_message,
+                sector="Non renseigné",
+                current_stage=current_stage,
+                key_weakness=key_weakness,
+                component_title=payload.clicked_component.title,
+                component_description=payload.clicked_component.description,
+            )
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail=f"Chat failed: {exc}")
+
+        now = datetime.now(timezone.utc)
+        cur.execute(
+            "INSERT INTO chat_messages (session_id, role, content, created_at) VALUES (%s, %s, %s, %s)",
+            (payload.session_id, "user", payload.new_message, now),
+        )
+        cur.execute(
+            "INSERT INTO chat_messages (session_id, role, content, created_at) VALUES (%s, %s, %s, %s)",
+            (payload.session_id, "assistant", reply, now),
+        )
 
     return {"status": "success", "data": {"reply": reply}}

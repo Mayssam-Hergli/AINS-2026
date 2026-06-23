@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(nslookup db.yyfvivczirwafopxvtqp.supabase.co)",
+      "Bash(nslookup yyfvivczirwafopxvtqp.supabase.co)",
+      "Bash(./venv/Scripts/python.exe -c ' *)",
+      "Bash(./venv/Scripts/python.exe -c \"from database import get_connection; c=get_connection\\(\\); print\\('CONNECTED' if c else 'FAILED'\\)\")"
+    ]
+  }
+}

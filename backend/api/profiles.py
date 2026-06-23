@@ -1,20 +1,23 @@
 """
-Profile management routes.
+Profile (project) management routes — now backed by Supabase's normalized
+schema: "projects" (one row per founder project) + "diagnostics" (one row
+per diagnostic run, holding raw_responses/scores JSONB).
 
-MS1 (Diagnostic Engine) will own the diagnostic flow and call
-PATCH /profiles/{id}/answers when a diagnostic is complete.
-Until MS1 is integrated, the frontend stub diagnostic submits
-answers through the same endpoint.
+SCHEMA MISMATCH, flagged rather than worked around silently: "projects"
+has no created_at/updated_at column. The previous SQLite project_profiles
+table did, and the frontend's dashboard sorts/displays by creation date.
+Until that column is added, list_profiles() can't order by recency and
+returns created_at: None — see the docstring on list_profiles().
 """
-import json
-import sqlite3
 import uuid
 from datetime import datetime, timezone
 
+import psycopg2.extensions
+import psycopg2.extras
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from database import get_db
+from database import get_db, db_cursor
 from security.auth import get_current_user
 
 router = APIRouter(prefix="/profiles", tags=["Profiles"])
@@ -22,6 +25,8 @@ router = APIRouter(prefix="/profiles", tags=["Profiles"])
 
 class CreateProfile(BaseModel):
     name: str
+    sector: str | None = None
+    description: str | None = None
 
 
 class UpdateAnswers(BaseModel):
@@ -29,92 +34,119 @@ class UpdateAnswers(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# POST /profiles  — create a new project profile
+# POST /profiles  — create a new project
 # ---------------------------------------------------------------------------
 
 @router.post("", status_code=201)
 def create_profile(
     body: CreateProfile,
-    db: sqlite3.Connection = Depends(get_db),
+    db: psycopg2.extensions.connection = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
     profile_id = str(uuid.uuid4())
-    now = datetime.now(timezone.utc).isoformat()
-    db.execute(
-        """
-        INSERT INTO project_profiles (id, user_id, name, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?)
-        """,
-        (profile_id, current_user["id"], body.name, now, now),
-    )
-    return {"id": profile_id, "name": body.name, "created_at": now}
+    with db_cursor(db) as cur:
+        cur.execute(
+            "INSERT INTO projects (id, user_id, name, sector, description) VALUES (%s, %s, %s, %s, %s)",
+            (profile_id, current_user["id"], body.name, body.sector, body.description),
+        )
+    return {"id": profile_id, "name": body.name}
 
 
 # ---------------------------------------------------------------------------
-# GET /profiles  — list all profiles owned by the current user
+# GET /profiles  — list all projects owned by the current user
 # ---------------------------------------------------------------------------
 
 @router.get("")
 def list_profiles(
-    db: sqlite3.Connection = Depends(get_db),
+    db: psycopg2.extensions.connection = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    rows = db.execute(
-        """
-        SELECT id, name, diagnostic_answers, market_score, created_at, updated_at
-        FROM project_profiles
-        WHERE user_id = ?
-        ORDER BY created_at DESC
-        """,
-        (current_user["id"],),
-    ).fetchall()
+    """
+    NOTE: "projects" has no created_at column, so this can't sort by
+    recency like the old SQLite version did — ordered by id instead.
+    Each project's most recent diagnostic (if any) is pulled via a
+    LATERAL join to derive status (pending / diagnostic_complete / scored).
+    """
+    with db_cursor(db) as cur:
+        cur.execute(
+            """
+            SELECT p.id, p.name,
+                   d.raw_responses, d.scores
+            FROM projects p
+            LEFT JOIN LATERAL (
+                SELECT raw_responses, scores
+                FROM diagnostics
+                WHERE diagnostics.project_id = p.id
+                ORDER BY completed_at DESC NULLS LAST
+                LIMIT 1
+            ) d ON true
+            WHERE p.user_id = %s
+            ORDER BY p.id
+            """,
+            (current_user["id"],),
+        )
+        rows = cur.fetchall()
     return [_summary(r) for r in rows]
 
 
 # ---------------------------------------------------------------------------
-# GET /profiles/{profile_id}  — single profile (full row)
+# GET /profiles/{profile_id}  — single project (full row)
 # ---------------------------------------------------------------------------
 
 @router.get("/{profile_id}")
 def get_profile(
     profile_id: str,
-    db: sqlite3.Connection = Depends(get_db),
+    db: psycopg2.extensions.connection = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    row = db.execute(
-        "SELECT * FROM project_profiles WHERE id = ? AND user_id = ?",
-        (profile_id, current_user["id"]),
-    ).fetchone()
+    with db_cursor(db) as cur:
+        cur.execute(
+            "SELECT * FROM projects WHERE id = %s AND user_id = %s",
+            (profile_id, current_user["id"]),
+        )
+        row = cur.fetchone()
     if row is None:
         raise HTTPException(status_code=404, detail="Profile not found")
     return dict(row)
 
 
 # ---------------------------------------------------------------------------
-# PATCH /profiles/{profile_id}/answers  — set diagnostic answers
-# MS1 will call this endpoint when a diagnostic run completes.
-# The frontend diagnostic stub calls it too.
+# PATCH /profiles/{profile_id}/answers  — upsert the project's diagnostic
 # ---------------------------------------------------------------------------
 
 @router.patch("/{profile_id}/answers")
 def set_answers(
     profile_id: str,
     body: UpdateAnswers,
-    db: sqlite3.Connection = Depends(get_db),
+    db: psycopg2.extensions.connection = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    row = db.execute(
-        "SELECT id FROM project_profiles WHERE id = ? AND user_id = ?",
-        (profile_id, current_user["id"]),
-    ).fetchone()
-    if row is None:
-        raise HTTPException(status_code=404, detail="Profile not found")
+    with db_cursor(db) as cur:
+        cur.execute(
+            "SELECT id FROM projects WHERE id = %s AND user_id = %s",
+            (profile_id, current_user["id"]),
+        )
+        if cur.fetchone() is None:
+            raise HTTPException(status_code=404, detail="Profile not found")
 
-    now = datetime.now(timezone.utc).isoformat()
-    db.execute(
-        "UPDATE project_profiles SET diagnostic_answers = ?, updated_at = ? WHERE id = ?",
-        (json.dumps(body.diagnostic_answers), now, profile_id),
-    )
+        now = datetime.now(timezone.utc)
+        cur.execute(
+            "SELECT id FROM diagnostics WHERE project_id = %s ORDER BY completed_at DESC NULLS LAST LIMIT 1",
+            (profile_id,),
+        )
+        existing = cur.fetchone()
+
+        if existing:
+            cur.execute(
+                "UPDATE diagnostics SET raw_responses = %s, completed_at = %s WHERE id = %s",
+                (psycopg2.extras.Json(body.diagnostic_answers), now, existing["id"]),
+            )
+        else:
+            cur.execute(
+                "INSERT INTO diagnostics (id, project_id, raw_responses, completed_at) VALUES (%s, %s, %s, %s)",
+                (str(uuid.uuid4()), profile_id, psycopg2.extras.Json(body.diagnostic_answers), now),
+            )
+
     return {"profile_id": profile_id, "status": "answers_saved"}
 
 
@@ -122,9 +154,9 @@ def set_answers(
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _summary(row: sqlite3.Row) -> dict:
-    has_answers = bool(row["diagnostic_answers"])
-    has_scores = bool(row["market_score"])
+def _summary(row: dict) -> dict:
+    has_answers = bool(row["raw_responses"])
+    has_scores = bool(row["scores"])
     if has_scores:
         status = "scored"
     elif has_answers:
@@ -135,6 +167,5 @@ def _summary(row: sqlite3.Row) -> dict:
         "id": row["id"],
         "name": row["name"] or "Sans titre",
         "status": status,
-        "created_at": row["created_at"],
-        "updated_at": row["updated_at"],
+        "created_at": None,  # "projects" has no created_at column — see module docstring
     }

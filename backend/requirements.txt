@@ -11,6 +11,9 @@ passlib
 python-dotenv
 pydantic-settings
 
+# Database — Supabase PostgreSQL (replaces SQLite)
+psycopg2-binary
+
 # Rate limiting
 slowapi
 
