@@ -42,7 +42,7 @@ from pydantic import BaseModel
 
 from database import get_db, db_cursor
 from security.auth import get_current_user
-from rag.roadmap import generate_roadmap, evaluate_progress, contextual_chat, derive_maturity_stage
+from rag.roadmap import generate_roadmap, evaluate_progress, contextual_chat, derive_maturity_stage,LLM_chat
 
 router = APIRouter(prefix="/roadmap", tags=["Roadmap (MS3)"])
 
@@ -124,6 +124,8 @@ def generate(
             # of IDs, and a rich explanation inside the "description" field.
             
             kb_ids_array = step.get("addresses", [])
+            if not isinstance(kb_ids_array, list):
+                kb_ids_array = [kb_ids_array]  # Ensure it's a list
 
             cur.execute(
                 """
@@ -349,4 +351,31 @@ def chat(
             (payload.session_id, "assistant", reply, now),
         )
 
+    return {"status": "success", "data": {"reply": reply}}
+class AskLLMRequest(BaseModel):
+    profile_id: str
+    question: str
+@router.post("/ask-llm")
+def ask_llm(
+    payload: AskLLMRequest,
+    db: psycopg2.extensions.connection = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    with db_cursor(db) as cur:
+        diagnostic = _load_project_and_diagnostic(cur, payload.profile_id, current_user["id"])
+        diagnostic_answers = (diagnostic["raw_responses"] if diagnostic else None) or {}
+        bundle = (diagnostic["scores"] if diagnostic else None) or {}
+        scores = {k: bundle.get(k) for k in ("market", "commercial", "innovation", "scalability", "green")}
+        anomaly_flags = bundle.get("anomaly_flags", [])
+        current_stage = derive_maturity_stage(scores, diagnostic_answers)
+        key_weakness = anomaly_flags[0]["message"] if anomaly_flags else "Aucune faiblesse critique identifiée."
+    try:
+        reply = LLM_chat(
+            system_prompt="You are a helpful assistant for entrepreneurs, providing advice based on their diagnostic answers and scores.my project have those {key_weakness} and my current maturity stage is {current_stage} and those anomaly flags {anomaly_flags}.",
+            messages=[{"role": "user", "content": payload.question}],
+            max_tokens=1500,
+            temperature=0.4
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Chat failed: {exc}")
     return {"status": "success", "data": {"reply": reply}}

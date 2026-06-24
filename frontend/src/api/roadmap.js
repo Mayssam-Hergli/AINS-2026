@@ -30,4 +30,13 @@ export const roadmapApi = {
       },
       token,
     }),
+    askLLM: (token, { profileId, question }) =>
+    request('/roadmap/ask-llm', {
+      method: 'POST',
+      body: {
+        profile_id: profileId,
+        question: question,
+      },
+      token,
+    }),
 }

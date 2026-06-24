@@ -92,6 +92,7 @@ RÈGLES DE GÉNÉRATION (À SUIVRE IMPÉRATIVEMENT) :
 
 5. ACTIONNABILE ET MESURABLE :
    - Le `title` doit commencer par un verbe d'action à l'infinitif (ex: "Valider", "Enregistrer", "Structurer", "Pivoter").
+6. etapes doivent être concrètes et réalisables, pas des concepts abstraits et essaie de diviser les étapes trop longues en sous-étapes pour atteindre au moyen 5 à 7 étapes concrètes par feuille de route.
 """
 PROGRESS_SCHEMA = {
     "type": "object",
@@ -134,6 +135,10 @@ _DIMENSION_DOMAIN = {
 # ---------------------------------------------------------------------------
 # Adapter: our diagnostic_answers + MS2 scores  ->  MS3's expected shapes
 # ---------------------------------------------------------------------------
+
+def LLM_chat(system_prompt: str, messages: list[dict], max_tokens: int = 1500, temperature: float = 0.4) -> str:
+    """Provider-agnostic plain-text conversational call (used by /roadmap/chat)."""
+    return call_llm_chat(system_prompt=system_prompt, messages=messages, max_tokens=max_tokens, temperature=temperature)
 
 def derive_maturity_stage(scores: dict[str, Any], diagnostic_answers: dict[str, Any]) -> str:
     """
@@ -300,17 +305,6 @@ def generate_roadmap(
     - sequential milestones grouped by Horizon 1 (immediate), 2 (short term), or 3 (medium term)
     - explicit map links using 'addresses.ref_id' and 'resources', citing only
       the kb_id values present in the retrieved chunks above.
-
-    IMPORTANT — "addresses" is a SINGLE OBJECT per step, never a list. Example
-    of one correctly-shaped step:
-    {{
-      "id": "step_1", "order": 1, "title": "...", "title_en_short": "...",
-      "time_horizon": "Horizon 1", "icon": "validation",
-      "addresses": {{"type": "gap", "ref_id": "market_no_validation", "label": "Validation client"}},
-      "explanation": "...",
-      "resources": [{{"source_id": "kb_0002", "title": "...", "type": "administrative", "link": "https://...", "downloadable": false}}]
-    }}
-
     project_id = "{profile_id}"
     generated_at = "{datetime.now(timezone.utc).isoformat()}"
     maturity_stage = "{stage}"
