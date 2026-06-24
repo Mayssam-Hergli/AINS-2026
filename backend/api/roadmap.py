@@ -123,9 +123,11 @@ def generate(
             extra_resources_note = ""
             if resources:
                 first_kb_id = resources[0].get("source_id")
-                cur.execute("SELECT id FROM knowledge_base WHERE kb_id = %s", (first_kb_id,))
+                # FK kb_refrence references knowledge_base(kb_id) — the text key,
+                # not the bigint id. Store the kb_id so the constraint is satisfied.
+                cur.execute("SELECT kb_id FROM knowledge_base WHERE kb_id = %s", (first_kb_id,))
                 kb_row = cur.fetchone()
-                referenced_kb_id = kb_row["id"] if kb_row else None
+                referenced_kb_id = kb_row["kb_id"] if kb_row else None
                 if len(resources) > 1:
                     extra_titles = ", ".join(r.get("title", r.get("source_id", "")) for r in resources[1:])
                     extra_resources_note = f" (voir aussi: {extra_titles})"
@@ -182,7 +184,7 @@ def get_cached(
             SELECT rs.step_order, rs.title, rs.time_horizon, rs.description, rs.status,
                    kb.kb_id, kb.title AS kb_title, kb.type AS kb_type, kb.source_url
             FROM roadmap_steps rs
-            LEFT JOIN knowledge_base kb ON kb.id = rs.referenced_kb_id
+            LEFT JOIN knowledge_base kb ON kb.kb_id = rs.referenced_kb_id
             WHERE rs.roadmap_id = %s
             ORDER BY rs.step_order
             """,

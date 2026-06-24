@@ -1,10 +1,12 @@
 import { request } from './client'
 
 export const authApi = {
-  register: (email, password) =>
+  register: (email, password, fullName) =>
     request('/auth/register', {
       method: 'POST',
-      body: { email, password },
+      // backend users.full_name is NOT NULL — derive a sensible default from
+      // the email local-part when the signup form doesn't collect a name.
+      body: { email, password, full_name: (fullName && fullName.trim()) || email.split('@')[0] },
     }),
 
   login: async (email, password) => {
