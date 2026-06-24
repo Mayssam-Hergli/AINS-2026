@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useLang } from '../context/LanguageContext'
+import { profilesApi } from '../api/profiles'
 import Spinner from '../components/Spinner'
 
 const SORA  = { fontFamily: "'Sora', sans-serif" }
@@ -28,7 +29,16 @@ export default function LoginPage() {
     setLoading(true)
     try {
       await login(email, password)
-      navigate('/dashboard')
+      // Route by diagnostic status: not done -> answer the questionnaire first,
+      // already done -> straight to the dashboard scores.
+      let dest = '/diagnostic'
+      try {
+        const token = localStorage.getItem('token')
+        const list = await profilesApi.list(token)
+        const status = list && list[0] ? list[0].status : undefined
+        if (status === 'diagnostic_complete' || status === 'scored') dest = '/dashboard'
+      } catch { /* default to /diagnostic */ }
+      navigate(dest, { replace: true })
     } catch (err) {
       setError(err.message || L.error_default)
     } finally {

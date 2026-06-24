@@ -28,7 +28,8 @@ export default function RegisterPage() {
     try {
       await authApi.register(email, password)
       await login(email, password)
-      navigate('/dashboard')
+      // A brand-new account never has a diagnostic yet → straight to the questionnaire.
+      navigate('/diagnostic', { replace: true })
     } catch (err) {
       setError(err.message || R.error_default)
     } finally {
